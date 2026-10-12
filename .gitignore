@@ -1,0 +1,11 @@
+secretos-github.txt
+*.jks
+*.p12
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+.clasp.json
+.clasprc.json
+node_modules/
+.DS_Store

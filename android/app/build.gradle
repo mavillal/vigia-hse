@@ -1,0 +1,54 @@
+plugins {
+    id 'com.android.application'
+}
+
+// Valores que entrega GitHub Actions (secretos y variables del repo).
+// VERSION_CODE = cantidad de commits del repo (siempre crece; ver .github/workflows/apk.yml).
+def versionNum = (System.getenv('VERSION_CODE') ?: System.getenv('GITHUB_RUN_NUMBER') ?: '1').toInteger()
+def playerUrl = System.getenv('PLAYER_URL') ?: 'https://mavillal.github.io/vigia-hse/'
+def apiUrl = System.getenv('API_URL') ?: 'https://script.google.com/macros/s/AKfycbzCVG8fk5Skg7hQGiO_NB5dgpMxMiBMKJbR_oa-seOWnM7cp_VcJEqFmqk3ElNTW8yM/exec'
+def keystorePath = System.getenv('KEYSTORE_PATH')
+def keystorePass = System.getenv('KEYSTORE_PASS')
+
+android {
+    namespace 'pe.vigia.hse'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId 'pe.vigia.hse'
+        minSdk 24
+        targetSdk 34
+        versionCode versionNum
+        versionName "1.0.${versionNum}"
+        buildConfigField 'String', 'PLAYER_URL', "\"${playerUrl}\""
+        buildConfigField 'String', 'API_URL', "\"${apiUrl}\""
+        buildConfigField 'String', 'AREAS_DEFECTO', '"GARITA,COMEDOR,TALLER"'   // solo si no hay internet al configurar
+    }
+
+    buildFeatures {
+        buildConfig true
+    }
+
+    signingConfigs {
+        release {
+            if (keystorePath) {
+                storeFile file(keystorePath)
+                storePassword keystorePass
+                keyAlias 'vigia'
+                keyPassword keystorePass
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig keystorePath ? signingConfigs.release : signingConfigs.debug
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}

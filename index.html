@@ -1,0 +1,740 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Vigía HSE</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --navy:#0A1D4E; --navy2:#13296A; --navy3:#1E3A8A; --accent:#2563EB;
+    --paper:#F4F6FA; --white:#FFFFFF; --ink:#0F1B33; --muted:#55627D; --soft:#8E9AB3; --line:#D5DDEA;
+    --on:#FFFFFF; --on2:#B9C7E6;
+    --verde:#1F9D55; --amarilla:#F2B705; --roja:#D62828; --gris:#6B7280;
+    --f:"Barlow",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    --fc:"Barlow Condensed","Barlow",system-ui,sans-serif;
+    --band:22vh;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;overflow:hidden;cursor:none;background:var(--paper);color:var(--ink);font-family:var(--f);-webkit-font-smoothing:antialiased}
+
+  /* ---------- escenario ---------- */
+  #stage{position:absolute;top:0;left:0;right:0;bottom:var(--band);background:var(--paper);overflow:hidden}
+  .slide{position:absolute;top:0;left:0;width:100%;height:100%;object-fit:contain;opacity:0;transition:opacity .9s ease}
+  .slide.on{opacity:1}
+  .pic .bg{position:absolute;top:0;left:0;right:0;bottom:0;background-size:cover;background-position:center}
+  .pic .bg:after{content:"";position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(10,29,78,.35)}
+  .pic img{position:absolute;top:0;left:0;width:100%;height:100%;object-fit:contain}
+
+  /* tarjeta de aviso de texto */
+  .card{display:flex;align-items:center;padding:6vh 7vw;background:var(--white)}
+  .card:before{content:"";position:absolute;left:0;top:0;bottom:0;width:1.6vw;background:var(--c,var(--navy3))}
+  .card .wrap{width:100%;max-width:66vw}
+  .card .head{display:flex;align-items:center;gap:1.6vw;margin-bottom:3.6vh}
+  .card .ico{width:9vh;height:9vh;border-radius:1.6vh;display:flex;align-items:center;justify-content:center;flex:none;background:var(--c,var(--navy3))}
+  .card .ico svg{width:5.4vh;height:5.4vh;stroke:#fff;fill:none;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+  .card .cat{font-family:var(--fc);font-size:3.2vh;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--c,var(--navy3))}
+  .card h1{font-family:var(--fc);font-size:8.4vh;line-height:1.02;font-weight:700;letter-spacing:-.005em;margin:0 0 2.6vh;text-wrap:balance}
+  .card .body{font-size:3.9vh;line-height:1.36;margin:0;color:#24324D;white-space:pre-line}
+  .card .until{margin-top:3vh;font-size:2.2vh;color:var(--muted);letter-spacing:.03em}
+
+  /* bienvenida */
+  #empty{position:absolute;top:0;left:0;right:0;bottom:0;display:none;flex-direction:column;align-items:center;justify-content:center;text-align:center;background:var(--navy);color:var(--on)}
+  #empty .k{font-family:var(--fc);font-size:3vh;letter-spacing:.3em;text-transform:uppercase;color:var(--on2)}
+  #empty h1{font-family:var(--fc);font-size:15vh;font-weight:700;letter-spacing:.01em;margin:1.4vh 0 2vh;text-transform:uppercase}
+  #empty .rule{width:8vw;border-top:.6vh solid var(--amarilla)}
+
+  /* QR de la pieza (asistencia o link) */
+  #qr{position:absolute;top:3.4vh;right:2.4vw;background:#fff;border-radius:1.6vh;padding:1.6vh 1.6vh 1.2vh;display:none;
+    flex-direction:column;align-items:center;gap:1vh;box-shadow:0 .6vh 3vh rgba(10,29,78,.18);z-index:4;border:.3vh solid var(--navy)}
+  body.s-AMARILLA #qr{top:13vh}
+  #qr .code{width:21vh;height:21vh}
+  #qr .code img,#qr .code canvas{width:100%!important;height:100%!important}
+  #qr .t{font-family:var(--fc);font-size:2.4vh;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--navy);text-align:center;line-height:1.1;max-width:22vh}
+
+  #count{position:absolute;right:1.6vw;bottom:1.6vh;min-width:4.4vh;height:4.4vh;padding:0 1.1vh;border-radius:999px;
+    background:rgba(255,255,255,.88);color:var(--muted);font-size:2.1vh;font-weight:600;font-variant-numeric:tabular-nums;
+    display:none;align-items:center;justify-content:center;z-index:4}
+
+  /* aviso urgente del Form */
+  #urg{position:absolute;top:0;left:0;right:0;padding:1.6vh 3vw;background:var(--roja);color:#fff;font-family:var(--fc);font-size:3.4vh;
+    font-weight:700;letter-spacing:.08em;text-transform:uppercase;display:none;align-items:center;gap:1.4vw;z-index:6}
+  .dot{width:1.8vh;height:1.8vh;border-radius:50%;background:#fff;animation:blink 1s ease-in-out infinite alternate;flex:none}
+  @keyframes blink{from{opacity:1}to{opacity:.25}}
+
+  /* semáforo AMARILLA: franja superior */
+  #amarilla{position:absolute;top:0;left:0;right:0;z-index:7;display:none;align-items:center;gap:2vw;padding:2vh 3vw;
+    background:var(--amarilla);color:#1B1300;border-bottom:.5vh solid #A67C00}
+  #amarilla .t{font-family:var(--fc);font-size:4.6vh;font-weight:800;letter-spacing:.04em;text-transform:uppercase;white-space:nowrap}
+  #amarilla .m{font-size:3vh;font-weight:600;line-height:1.25}
+  #amarilla .dot{background:#1B1300}
+
+  /* semáforo ROJA y alerta urgente: ocupan todo el escenario */
+  .full{position:absolute;top:0;left:0;right:0;bottom:0;z-index:8;display:none;flex-direction:column;justify-content:center;padding:6vh 7vw;color:#fff}
+  #roja{background:var(--roja)}
+  #roja:after,#alerta:after{content:"";position:absolute;top:0;left:0;right:0;bottom:0;border:1.4vh solid rgba(255,255,255,.9);animation:blink 1.1s ease-in-out infinite alternate;pointer-events:none}
+  #alerta{background:#7A0E0E}
+  .full .k{font-family:var(--fc);font-size:3.6vh;font-weight:700;letter-spacing:.3em;text-transform:uppercase;opacity:.9;display:flex;align-items:center;gap:1.2vw}
+  .full h1{font-family:var(--fc);font-size:17vh;line-height:.92;font-weight:800;text-transform:uppercase;margin:2vh 0 3vh;letter-spacing:-.005em}
+  #alerta h1{font-size:10vh;line-height:1;text-transform:none;text-wrap:balance}
+  .full .m{font-size:4.6vh;line-height:1.3;font-weight:600;max-width:78vw}
+  .full .d{margin-top:3vh;font-size:2.6vh;opacity:.85;font-variant-numeric:tabular-nums}
+  #alertaSem{margin-top:3vh;display:none;font-family:var(--fc);font-size:3.4vh;font-weight:700;text-transform:uppercase;letter-spacing:.06em;
+    background:rgba(255,255,255,.14);padding:1.2vh 1.6vw;border-radius:1vh;align-self:flex-start}
+
+  /* sin conexión */
+  #offbar{position:absolute;left:0;right:0;bottom:0;z-index:9;display:none;align-items:center;gap:1.4vw;padding:1.6vh 3vw;
+    background:#1F2937;color:#fff;font-size:2.8vh;font-weight:600}
+  #offbar .dot{background:var(--amarilla)}
+
+  /* ---------- franja inferior ---------- */
+  #band{position:absolute;left:0;right:0;bottom:0;height:var(--band);background:var(--navy);color:var(--on);display:flex;flex-direction:column}
+  #band .row{flex:1;display:flex;align-items:stretch;min-height:0}
+  .blk{display:flex;align-items:center;gap:1.2vw;padding:0 1.8vw;min-width:0;white-space:nowrap}
+  .blk + .blk{border-left:1px solid rgba(255,255,255,.14)}
+  .lbl{font-family:var(--fc);font-size:2vh;font-weight:600;letter-spacing:.2em;text-transform:uppercase;color:var(--on2)}
+  #left{width:24vw;flex-direction:column;align-items:flex-start;justify-content:center;gap:.4vh}
+  #areaName{font-family:var(--fc);font-size:3.2vh;font-weight:700;letter-spacing:.06em;text-transform:uppercase;max-width:100%;overflow:hidden;text-overflow:ellipsis}
+  #clockRow{display:flex;align-items:baseline;gap:1vw}
+  #clock{font-family:var(--fc);font-size:6vh;font-weight:600;line-height:1;font-variant-numeric:tabular-nums}
+  #date{font-size:2vh;color:var(--on2)}
+
+  #sem{width:28vw}
+  #semLuz{width:9vh;height:9vh;border-radius:50%;flex:none;background:var(--gris);box-shadow:0 0 0 .6vh rgba(255,255,255,.12)}
+  #semTxt{min-width:0}
+  #semEstado{font-family:var(--fc);font-size:5vh;font-weight:800;line-height:1;text-transform:uppercase;letter-spacing:.02em}
+  #semNota{font-size:1.9vh;color:var(--on2);margin-top:.5vh;overflow:hidden;text-overflow:ellipsis}
+  body.s-VERDE #semLuz{background:var(--verde)}
+  body.s-AMARILLA #semLuz{background:var(--amarilla);animation:blink 1.4s ease-in-out infinite alternate}
+  body.s-ROJA #semLuz{background:var(--roja);animation:blink .9s ease-in-out infinite alternate}
+  body.offline #semLuz{background:var(--gris);animation:none}
+  body.offline #semEstado{color:#D1D5DB}
+
+  #wx{width:22vw}
+  #wIcon svg{width:7.6vh;height:7.6vh;display:block}
+  #wTemp{font-family:var(--fc);font-size:5.4vh;font-weight:600;line-height:1}
+  #wDesc{font-size:1.9vh;color:var(--on2);line-height:1.3;margin-top:.4vh}
+  #wDesc b{color:var(--on);font-weight:600}
+  #wStorm{color:var(--amarilla)!important;font-weight:700}
+
+  #ind{flex:1;flex-direction:column;align-items:flex-start;justify-content:center;gap:.6vh}
+  #ind > div{transition:opacity .5s ease}
+  #ind.fade > div{opacity:0}
+  #indVal{font-family:var(--fc);font-size:5.4vh;font-weight:700;line-height:1;font-variant-numeric:tabular-nums}
+  #indVal.star{color:var(--amarilla)}
+  #indName{font-size:2vh;color:var(--on2);white-space:normal;line-height:1.2}
+
+  #tickerRow{height:5.2vh;background:var(--navy2);display:flex;align-items:center;overflow:hidden;border-top:1px solid rgba(255,255,255,.08)}
+  #tickerRow .lbl{flex:none;padding:0 1.6vw;height:100%;display:flex;align-items:center;background:var(--navy3);color:#fff}
+  #tickerBox{flex:1;overflow:hidden;white-space:nowrap;
+    -webkit-mask-image:linear-gradient(90deg,transparent 0,#000 2%,#000 96%,transparent 100%);
+            mask-image:linear-gradient(90deg,transparent 0,#000 2%,#000 96%,transparent 100%)}
+  #ticker{display:inline-block;font-size:3.1vh;font-weight:500;will-change:transform}
+  #ticker .sep{display:inline-block;width:1vh;height:1vh;background:var(--amarilla);margin:0 2vw;vertical-align:middle;transform:rotate(45deg)}
+  @keyframes scroll{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+
+  #sos{height:4.2vh;background:#06143A;display:flex;align-items:center;gap:1.6vw;padding:0 1.8vw;font-size:2.1vh;white-space:nowrap;overflow:hidden;color:var(--on2)}
+  #sos .h{font-family:var(--fc);font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:#FF8A8A;display:flex;align-items:center;gap:.7vw}
+  #sos .h:before{content:"";width:1vh;height:1vh;border-radius:50%;background:#FF5A5A}
+  #sos b{color:#fff;font-weight:700;font-variant-numeric:tabular-nums}
+  #sosCentral b{color:var(--amarilla)}
+
+  /* ---------- selector de pantallas ---------- */
+  #picker{position:absolute;top:0;left:0;right:0;bottom:0;overflow:auto;display:none;cursor:auto;padding:7vh 6vw 6vh;background:var(--paper)}
+  #picker .k{font-family:var(--fc);font-size:15px;font-weight:600;letter-spacing:.24em;text-transform:uppercase;color:var(--accent)}
+  #picker h1{font-family:var(--fc);font-size:clamp(36px,5vw,72px);font-weight:700;letter-spacing:.01em;margin:8px 0 6px;text-transform:uppercase;color:var(--navy)}
+  #picker .sub{color:var(--muted);font-size:17px;margin:0 0 4vh;max-width:70ch;line-height:1.5}
+  #picker h2{font-family:var(--fc);font-size:15px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:var(--muted);margin:4vh 0 14px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:16px}
+  .tile{display:flex;flex-direction:column;gap:6px;background:var(--white);border:1px solid var(--line);border-radius:10px;
+    padding:20px 20px 16px;text-decoration:none;color:var(--ink);transition:transform .15s ease,border-color .15s ease,box-shadow .15s ease}
+  .tile:hover,.tile:focus{transform:translateY(-2px);border-color:var(--accent);box-shadow:0 10px 30px rgba(10,29,78,.10);outline:none}
+  .tile .c{font-family:var(--fc);font-size:13px;letter-spacing:.2em;text-transform:uppercase;color:var(--accent);font-weight:700}
+  .tile .n{font-size:21px;font-weight:600;line-height:1.2}
+  .tile .go{margin-top:8px;font-size:14px;color:var(--muted)}
+  .tile.ctl{background:var(--navy);color:#fff;border-color:var(--navy)}
+  .tile.ctl .c{color:var(--amarilla)} .tile.ctl .go{color:var(--on2)}
+  #picker .foot{margin-top:5vh;font-size:13px;color:var(--soft)}
+
+  #nav{position:absolute;top:2.2vh;left:50%;transform:translateX(-50%);display:none;align-items:center;gap:6px;z-index:20;
+    background:rgba(255,255,255,.97);border:1px solid var(--line);border-radius:999px;padding:6px;box-shadow:0 8px 30px rgba(10,29,78,.18)}
+  #nav button{font:inherit;font-size:15px;color:var(--ink);background:transparent;border:0;border-radius:999px;padding:10px 18px;cursor:pointer}
+  #nav button:hover{background:var(--paper)}
+  #nav .cur{font-weight:700;color:var(--accent);padding:0 10px;font-size:15px;white-space:nowrap}
+  body.navon{cursor:auto}
+  #demoTag{position:absolute;top:1.4vh;left:1.4vw;z-index:30;display:none;background:var(--accent);color:#fff;font-family:var(--fc);font-weight:700;
+    letter-spacing:.14em;font-size:1.8vh;padding:.6vh 1vw;border-radius:.6vh;text-transform:uppercase}
+</style>
+</head>
+<body>
+
+<div id="picker">
+  <div class="k" id="pickUnidad">Vigía HSE</div>
+  <h1>Pantallas de seguridad</h1>
+  <p class="sub">Elige un área para ver su pantalla. Dentro, mueve el mouse o usa las flechas ← → para pasar a la siguiente.</p>
+  <div class="grid" id="grid"></div>
+  <h2>Herramientas</h2>
+  <div class="grid">
+    <a class="tile ctl" href="control.html"><span class="c">Sala de control</span><span class="n">Semáforo y alerta urgente</span><span class="go">Abrir con clave →</span></a>
+    <a class="tile" href="?area=DEMO&amp;demo=verde"><span class="c">Demostración</span><span class="n">Semáforo verde</span><span class="go">Ver ejemplo →</span></a>
+    <a class="tile" href="?area=DEMO&amp;demo=amarilla"><span class="c">Demostración</span><span class="n">Alerta amarilla</span><span class="go">Ver ejemplo →</span></a>
+    <a class="tile" href="?area=DEMO&amp;demo=roja"><span class="c">Demostración</span><span class="n">Alerta roja</span><span class="go">Ver ejemplo →</span></a>
+    <a class="tile" href="?area=DEMO&amp;demo=alerta"><span class="c">Demostración</span><span class="n">Alerta urgente</span><span class="go">Ver ejemplo →</span></a>
+    <a class="tile" href="?area=DEMO&amp;demo=sinsenal"><span class="c">Demostración</span><span class="n">Pantalla sin conexión</span><span class="go">Ver ejemplo →</span></a>
+  </div>
+  <div class="foot" id="pickFoot"></div>
+</div>
+
+<div id="nav">
+  <button id="navPrev" type="button">‹ Anterior</button>
+  <button id="navAll" type="button">Todas</button>
+  <span class="cur" id="navCur"></span>
+  <button id="navNext" type="button">Siguiente ›</button>
+</div>
+<div id="demoTag">Demostración</div>
+
+<div id="stage">
+  <div id="empty">
+    <div class="k" id="emptyUnidad">Vigía HSE</div>
+    <h1>Seguridad primero</h1>
+    <div class="rule"></div>
+  </div>
+  <div id="urg"><span class="dot"></span><span>Aviso urgente</span></div>
+  <div id="qr"><div class="code" id="qrCode"></div><div class="t" id="qrTxt"></div></div>
+  <div id="count"></div>
+  <div id="amarilla"><span class="dot"></span><span class="t">Alerta amarilla</span><span class="m" id="amaMsg"></span></div>
+  <div class="full" id="roja">
+    <div class="k"><span class="dot"></span>Semáforo de tormenta eléctrica</div>
+    <h1>Alerta roja</h1>
+    <div class="m" id="rojaMsg"></div>
+    <div class="d" id="rojaDesde"></div>
+  </div>
+  <div class="full" id="alerta">
+    <div class="k"><span class="dot"></span>Alerta de emergencia</div>
+    <h1 id="alertaTxt"></h1>
+    <div class="d" id="alertaDesde"></div>
+    <div id="alertaSem"></div>
+  </div>
+  <div id="offbar"><span class="dot"></span><span id="offTxt">Pantalla sin conexión.</span></div>
+</div>
+
+<div id="band">
+  <div class="row">
+    <div class="blk" id="left">
+      <div id="areaName"></div>
+      <div id="clockRow"><div id="clock">--:--</div><div id="date"></div></div>
+    </div>
+    <div class="blk" id="sem">
+      <div id="semLuz"></div>
+      <div id="semTxt">
+        <div class="lbl">Semáforo de tormenta</div>
+        <div id="semEstado">Conectando…</div>
+        <div id="semNota"></div>
+      </div>
+    </div>
+    <div class="blk" id="wx">
+      <div id="wIcon"></div>
+      <div><div id="wTemp">--°</div><div id="wDesc"></div></div>
+    </div>
+    <div class="blk" id="ind">
+      <div id="indVal"></div>
+      <div id="indName"></div>
+    </div>
+  </div>
+  <div id="tickerRow"><div class="lbl">Seguridad</div><div id="tickerBox"><div id="ticker"></div></div></div>
+  <div id="sos">
+    <span class="h">Emergencias</span>
+    <span id="sosCentral"></span>
+    <span>SAMU <b>106</b></span><span>Bomberos <b>116</b></span><span>Policía <b>105</b></span>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="config.js"></script>
+<script>
+/* ===== CONFIGURACIÓN (la URL del backend está en config.js) ===== */
+var REFRESH_MS = 20 * 1000;                // contenido y semáforo: cada 20 s
+var STALE_MS = 90 * 1000;                  // sin respuesta por más de esto = "sin conexión"
+var WEATHER_MS = 15 * 60 * 1000;
+var LOAD_TIMEOUT_MS = 20000;
+var MAX_VIDEO_MS = 3 * 60 * 1000;
+var TZ = 'America/Lima';
+var TICKER_SPEED = 120;                    // px por segundo
+/* ========================= */
+
+var Q = new URLSearchParams(location.search);
+var AREA = (Q.get('area') || '').toUpperCase();
+var DEMO = Q.get('demo') || '';
+function $(id){ return document.getElementById(id); }
+var list = [], idx = -1, timer = null, current = null, sig = '', wasUrgent = false;
+var lastData = null, lastOk = 0, tickerSig = '', qrShown = '', semPrev = '', alertaPrev = '';
+var AREAS = [];
+
+function store(k, v){ try { localStorage.setItem(k, JSON.stringify(v)); } catch(e){} }
+function load(k){ try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch(e){ return null; } }
+function esc(s){ return String(s || '').replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+function hhmm(d){ return new Date(d).toLocaleTimeString('es-PE', { timeZone:TZ, hour:'2-digit', minute:'2-digit', hourCycle:'h23' }); }
+function cuando(iso){
+  if (!iso) return '';
+  var d = new Date(iso), hoy = new Date().toLocaleDateString('es-PE', { timeZone:TZ });
+  return d.toLocaleDateString('es-PE', { timeZone:TZ }) === hoy ? hhmm(d)
+    : d.toLocaleDateString('es-PE', { timeZone:TZ, day:'numeric', month:'short' }) + ' ' + hhmm(d);
+}
+
+/* Imágenes de Drive: pedirlas ya reducidas al tamaño del escenario. */
+function lh3(url){ return /^https:\/\/lh3\.googleusercontent\.com\/d\/[-\w]+$/.test(url || ''); }
+function sized(url){ return lh3(url) ? url + '=w1920-h850' : url; }
+function tiny(url){ return lh3(url) ? url + '=w40' : ''; }
+
+/* ---------- íconos de categoría ---------- */
+var CAT = [
+  { re:/charla/i,  color:'#1E3A8A', es:'Charla de 5 minutos',
+    svg:'<path d="M4 5.5h16v10H9l-5 4z"/><path d="M8 9.5h8M8 12.5h5"/>' },
+  { re:/alerta/i,  color:'#D62828', es:'Alerta de seguridad',
+    svg:'<path d="M12 3.8l9 15.7H3z"/><path d="M12 10v4.2"/><path d="M12 17.1v.1"/>' },
+  { re:/riesgo/i,  color:'#C2410C', es:'Riesgos críticos',
+    svg:'<path d="M12 3l8 3v6c0 4.6-3.4 8-8 9-4.6-1-8-4.4-8-9V6z"/><path d="M12 8.5v4.5"/><path d="M12 16v.1"/>' },
+  { re:/campa/i,   color:'#1F9D55', es:'Campaña',
+    svg:'<path d="M4 10v4l11 5V5z"/><path d="M15 9a3 3 0 0 1 0 6"/><path d="M7 14.5l1 4.5h3l-1-3.6"/>' },
+  { re:/indica/i,  color:'#2563EB', es:'Indicadores',
+    svg:'<path d="M4 20h16"/><path d="M7 16v-5M12 16V7M17 16v-8"/>' },
+  { re:/.*/,       color:'#55627D', es:'Aviso',
+    svg:'<circle cx="12" cy="12" r="8.6"/><path d="M12 11v5.2"/><path d="M12 7.9v.1"/>' }
+];
+function catOf(c){ for (var i = 0; i < CAT.length; i++) if (CAT[i].re.test(c || '')) return CAT[i]; return CAT[CAT.length-1]; }
+
+/* ---------- datos de demostración ---------- */
+function demoData(){
+  var h = new Date(Date.now() - 23 * 60000).toISOString();
+  var d = {
+    version:'demo', area:'DEMO', areaNombre:'Garita de ingreso', unidad:'Unidad Minera Ejemplo',
+    listaAreas:[{codigo:'DEMO', nombre:'Garita de ingreso'}],
+    urgente:false, recarga:'', central:'Anexo 4444 · Radio canal 5',
+    clima:{ lat:-16.53, lon:-71.59 },
+    semaforo:{ estado:'VERDE', mensaje:'Sin tormenta eléctrica cercana. Trabajos a la intemperie permitidos.', desde:h },
+    alerta:null,
+    cinta:[{es:'Use siempre sus tres puntos de contacto al subir o bajar de un equipo'},
+           {es:'Antes de intervenir un equipo: bloqueo y etiquetado, sin excepciones'},
+           {es:'Reporte todo incidente y acto inseguro a su supervisor'}],
+    indicadores:[{nombre:'Días sin accidentes incapacitantes', valor:'214', destacado:true},
+                 {nombre:'Índice de frecuencia (mes)', valor:'0,00'},
+                 {nombre:'Inspecciones planificadas cumplidas', valor:'92 %'}],
+    items:[
+      { titulo:'Tres puntos de contacto', categoria:'Charla de 5 minutos', tipo:'texto', url:'texto', dur:20, charla:'demo1234',
+        texto:'Al subir o bajar de un equipo mantenga siempre dos manos y un pie, o dos pies y una mano, en contacto con la escalera.\nNunca salte desde la plataforma.' },
+      { titulo:'Ingreso a espacio confinado solo con permiso escrito (PETAR) y monitoreo de gases', categoria:'Riesgos críticos', tipo:'texto', url:'texto', dur:14,
+        texto:'Vigía en la entrada durante todo el trabajo. Si el monitor alarma, todos salen.' },
+      { titulo:'Temporada de lluvias: ubique su refugio', categoria:'Campaña', tipo:'texto', url:'texto', dur:12,
+        texto:'Ante alerta roja diríjase al refugio o vehículo cerrado más cercano. No se refugie bajo árboles, torres ni estructuras metálicas.' }
+    ]
+  };
+  if (DEMO === 'amarilla') d.semaforo = { estado:'AMARILLA', mensaje:'Tormenta eléctrica a menos de 30 km. Prepárese para evacuar y ubique el refugio más cercano.', desde:h };
+  if (DEMO === 'roja') d.semaforo = { estado:'ROJA', mensaje:'Tormenta eléctrica a menos de 10 km. Suspenda todo trabajo a la intemperie y diríjase al refugio.', desde:h };
+  if (DEMO === 'alerta') { d.alerta = { texto:'Sismo: evacúe a la zona segura y espere instrucciones de su supervisor', desde:h };
+                           d.semaforo = { estado:'ROJA', mensaje:'Tormenta eléctrica a menos de 10 km.', desde:h }; }
+  return d;
+}
+
+/* ---------- contenido ---------- */
+function refresh(){
+  if (DEMO) {
+    if (DEMO === 'sinsenal') { if (!lastData) { var d0 = demoData(); apply(d0); lastOk = Date.now() - 7 * 60000; } }
+    else { lastOk = Date.now(); apply(demoData()); }
+    stale();
+    return;
+  }
+  fetch(API + '?area=' + encodeURIComponent(AREA) + '&ping=1&t=' + Date.now())
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      lastOk = Date.now();
+      d.savedAt = lastOk;
+      store('data_' + AREA, d);
+      if (d.recarga !== undefined && d.recarga !== '') {
+        if (window.__recarga === undefined) window.__recarga = d.recarga;
+        else if (d.recarga !== window.__recarga) { location.reload(); return; }
+      }
+      apply(d);
+      stale();
+    })
+    .catch(function(e){
+      if (!lastData) { var c = load('data_' + AREA); if (c) { lastOk = c.savedAt || 0; apply(c); } else showEmpty(true); }
+      stale();
+      console.warn('No se pudo leer el contenido.', e);
+    });
+}
+
+function apply(d){
+  lastData = d;
+  if (d.listaAreas && d.listaAreas.length) { AREAS = d.listaAreas; store('areas', AREAS); }
+  $('areaName').textContent = d.areaNombre || AREA;
+  $('emptyUnidad').textContent = d.unidad || 'Vigía HSE';
+  $('urg').style.display = d.urgente ? 'flex' : 'none';
+  $('sosCentral').innerHTML = d.central ? 'Central de la unidad <b>' + esc(d.central) + '</b>' : '';
+  renderSemaforo(d.semaforo || { estado:'VERDE' });
+  renderAlerta(d.alerta);
+  renderTicker(d.cinta || []);
+  renderInd(d.indicadores || []);
+  if (d.clima && (!window.__clima || window.__clima.lat !== d.clima.lat || window.__clima.lon !== d.clima.lon)) { window.__clima = d.clima; weather(); }
+
+  var items = d.items || [];
+  var s = JSON.stringify(items.map(function(x){ return [x.url, x.dur, x.titulo, x.texto, x.link, x.charla]; }));
+  if (s === sig) return;
+  sig = s; list = items; idx = -1;
+  if (d.urgente || wasUrgent || !current) next();
+  wasUrgent = !!d.urgente;
+}
+
+/* ---------- semáforo, alerta y estado de conexión ---------- */
+function renderSemaforo(s){
+  var est = s.estado || 'VERDE';
+  document.body.className = document.body.className.replace(/\bs-\w+/g, '').trim() + ' s-' + est;
+  var nombre = est === 'VERDE' ? 'Verde' : est === 'AMARILLA' ? 'Alerta amarilla' : 'Alerta roja';
+  if (!document.body.classList.contains('offline')) {
+    $('semEstado').textContent = nombre;
+    $('semNota').textContent = s.desde ? 'Desde las ' + cuando(s.desde) : '';
+  }
+  $('amarilla').style.display = est === 'AMARILLA' ? 'flex' : 'none';
+  $('amaMsg').textContent = s.mensaje || '';
+  $('roja').style.display = est === 'ROJA' ? 'flex' : 'none';
+  $('rojaMsg').textContent = s.mensaje || '';
+  $('rojaDesde').textContent = s.desde ? 'Activada a las ' + cuando(s.desde) : '';
+  if (semPrev && est !== semPrev && est !== 'VERDE') beep(est === 'ROJA' ? 3 : 2);
+  semPrev = est;
+}
+
+function renderAlerta(a){
+  $('alerta').style.display = a ? 'flex' : 'none';
+  if (!a) { alertaPrev = ''; return; }
+  $('alertaTxt').textContent = a.texto;
+  $('alertaDesde').textContent = a.desde ? 'Emitida a las ' + cuando(a.desde) : '';
+  var s = lastData && lastData.semaforo;
+  var sem = s && s.estado !== 'VERDE';
+  $('alertaSem').style.display = sem ? 'block' : 'none';
+  if (sem) $('alertaSem').textContent = 'Semáforo de tormenta: ' + (s.estado === 'ROJA' ? 'alerta roja' : 'alerta amarilla');
+  if (a.texto !== alertaPrev) beep(3);
+  alertaPrev = a.texto;
+}
+
+/* Si el backend no responde, se dice en pantalla: un semáforo viejo no puede pasar por vigente. */
+function stale(){
+  var off = !lastOk || Date.now() - lastOk > STALE_MS;
+  document.body.classList.toggle('offline', off);
+  $('offbar').style.display = off ? 'flex' : 'none';
+  if (off) {
+    $('semEstado').textContent = 'Sin señal';
+    $('semNota').textContent = lastOk ? 'Último dato ' + cuando(lastOk) + ' · confirme por radio' : 'Confirme el semáforo por radio';
+    $('offTxt').textContent = (lastOk ? 'Pantalla sin conexión desde las ' + cuando(lastOk) + '. ' : 'Pantalla sin conexión. ') +
+      'El semáforo puede no estar actualizado: confírmelo por radio con la sala de control.';
+  } else if (lastData) {
+    var s = lastData.semaforo || {};
+    $('semEstado').textContent = s.estado === 'AMARILLA' ? 'Alerta amarilla' : s.estado === 'ROJA' ? 'Alerta roja' : 'Verde';
+    $('semNota').textContent = s.desde ? 'Desde las ' + cuando(s.desde) : '';
+  }
+}
+
+/* Tono corto al pasar a alerta (el WebView del stick permite audio sin tocar la pantalla). */
+var AC = null;
+function beep(n){
+  try {
+    AC = AC || new (window.AudioContext || window.webkitAudioContext)();
+    if (AC.state === 'suspended') AC.resume();
+    for (var i = 0; i < n; i++) {
+      var o = AC.createOscillator(), g = AC.createGain(), t = AC.currentTime + i * 0.7;
+      o.type = 'square'; o.frequency.value = 880;
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.25, t + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.45);
+      o.connect(g); g.connect(AC.destination); o.start(t); o.stop(t + 0.5);
+    }
+  } catch(e){}
+}
+
+/* ---------- rotación de avisos ---------- */
+function next(){
+  clearTimeout(timer);
+  if (!list.length){ showEmpty(true); showQr(null); setCount(0); timer = setTimeout(next, 30000); return; }
+  showEmpty(false);
+  idx = (idx + 1) % list.length;
+  var it = list[idx];
+
+  if (it.tipo === 'texto') {
+    var el = buildCard(it);
+    $('stage').insertBefore(el, $('urg'));
+    reveal(el, it, Math.max(it.dur || 12, 12) * 1000);
+    return;
+  }
+  var isVideo = it.tipo === 'video';
+  var m = document.createElement(isVideo ? 'video' : 'img');
+  var box = m;
+  if (isVideo) m.className = 'slide';
+  else {
+    box = document.createElement('div');
+    box.className = 'slide pic';
+    if (tiny(it.url)) box.innerHTML = '<div class="bg" style="background-image:url(\'' + tiny(it.url) + '\')"></div>';
+    box.appendChild(m);
+  }
+  var shown = false;
+  var fail = function(){ if (!shown){ box.remove(); timer = setTimeout(next, 500); } };
+  var show = function(){ if (shown) return; shown = true; reveal(box, it, isVideo ? MAX_VIDEO_MS : (it.dur || 12) * 1000); };
+  if (isVideo){
+    m.muted = true; m.playsInline = true; m.autoplay = true; m.preload = 'auto';
+    m.addEventListener('loadeddata', show, { once:true });
+    m.addEventListener('ended', next);
+  } else {
+    m.addEventListener('load', show, { once:true });
+  }
+  m.addEventListener('error', fail, { once:true });
+  $('stage').insertBefore(box, $('urg'));
+  m.src = isVideo ? it.url : sized(it.url);
+  timer = setTimeout(fail, LOAD_TIMEOUT_MS);
+}
+
+function reveal(el, it, ms){
+  clearTimeout(timer);
+  requestAnimationFrame(function(){ el.classList.add('on'); });
+  if (current && current !== el){ var old = current; old.classList.remove('on'); setTimeout(function(){ old.remove(); }, 1000); }
+  current = el;
+  showQr(it);
+  if (el.tagName === 'VIDEO' && isFinite(el.duration) && el.duration > 0) ms = Math.min(ms, el.duration * 1000);
+  setCount(ms);
+  timer = setTimeout(next, ms);
+}
+
+var countEnd = 0, countTimer = null;
+function setCount(ms){
+  clearInterval(countTimer);
+  countEnd = ms ? Date.now() + ms : 0;
+  tickCount();
+  if (ms) countTimer = setInterval(tickCount, 250);
+}
+function tickCount(){
+  var left = Math.ceil((countEnd - Date.now()) / 1000);
+  $('count').style.display = left > 0 ? 'flex' : 'none';
+  if (left > 0) $('count').textContent = left;
+}
+
+function titleSize(t){
+  var n = String(t || '').length;
+  return n <= 36 ? 8.4 : n <= 64 ? 6.8 : n <= 100 ? 5.6 : 4.6;
+}
+function buildCard(it){
+  var c = catOf(it.categoria);
+  var el = document.createElement('div');
+  el.className = 'slide card';
+  el.style.setProperty('--c', c.color);
+  var until = '';
+  if (it.hasta) {
+    until = 'Vigente hasta ' + new Date(it.hasta).toLocaleString('es-PE', { timeZone:TZ, weekday:'short', day:'numeric', month:'short', hour:'2-digit', minute:'2-digit', hourCycle:'h23' });
+  }
+  el.innerHTML =
+    '<div class="wrap">' +
+      '<div class="head"><div class="ico"><svg viewBox="0 0 24 24">' + c.svg + '</svg></div>' +
+      '<div class="cat">' + esc(it.categoria || c.es) + '</div></div>' +
+      '<h1 style="font-size:' + titleSize(it.titulo) + 'vh">' + esc(it.titulo) + '</h1>' +
+      (it.texto ? '<p class="body">' + esc(it.texto) + '</p>' : '') +
+      (until ? '<div class="until">' + until + '</div>' : '') +
+    '</div>';
+  return el;
+}
+
+/* QR: la charla lleva al registro de asistencia; otras piezas, a su "Link para QR". */
+function baseUrl(){ return location.origin + location.pathname.replace(/[^\/]*$/, ''); }
+function showQr(it){
+  var url = '', txt = '';
+  if (it && it.charla) { url = baseUrl() + 'asistencia.html?c=' + encodeURIComponent(it.charla) + '&a=' + encodeURIComponent(AREA); txt = 'Registra tu asistencia'; }
+  else if (it && it.link) { url = it.link; txt = 'Escanea para ver más'; }
+  if (!url || typeof QRCode === 'undefined') { $('qr').style.display = 'none'; qrShown = ''; return; }
+  if (url !== qrShown) {
+    $('qrCode').innerHTML = '';
+    new QRCode($('qrCode'), { text:url, width:300, height:300, colorDark:'#0A1D4E', colorLight:'#FFFFFF', correctLevel: QRCode.CorrectLevel.M });
+    qrShown = url;
+  }
+  $('qrTxt').textContent = txt;
+  $('qr').style.display = 'flex';
+}
+
+function showEmpty(on){ $('empty').style.display = on ? 'flex' : 'none'; }
+
+/* ---------- cinta ---------- */
+function renderTicker(items){
+  if (!items.length) items = [{ es:'La seguridad es responsabilidad de todos' }];
+  var s = JSON.stringify(items);
+  if (s === tickerSig) return;
+  tickerSig = s;
+  var one = items.map(function(x){ return '<span>' + esc(x.es) + '</span>'; }).join('<span class="sep"></span>') + '<span class="sep"></span>';
+  var t = $('ticker');
+  t.style.animation = 'none';
+  t.innerHTML = one + one;
+  requestAnimationFrame(function(){
+    var half = t.scrollWidth / 2;
+    t.style.animation = 'scroll ' + Math.max(14, half / TICKER_SPEED) + 's linear infinite';
+  });
+}
+
+/* ---------- indicadores (rotan cada 8 s) ---------- */
+var inds = [], indIdx = 0, indTimer = null, indSig = '';
+function renderInd(arr){
+  var sg = JSON.stringify(arr);
+  if (sg === indSig) return;
+  indSig = sg; inds = arr; indIdx = 0;
+  clearInterval(indTimer);
+  $('ind').style.display = inds.length ? 'flex' : 'none';
+  if (!inds.length) return;
+  showInd();
+  if (inds.length > 1) indTimer = setInterval(function(){
+    $('ind').classList.add('fade');
+    setTimeout(function(){ indIdx = (indIdx + 1) % inds.length; showInd(); $('ind').classList.remove('fade'); }, 500);
+  }, 8000);
+}
+function showInd(){
+  var x = inds[indIdx];
+  $('indVal').textContent = x.valor;
+  $('indVal').className = x.destacado ? 'star' : '';
+  $('indName').textContent = x.nombre;
+}
+
+/* ---------- clima y pronóstico de tormenta (Open-Meteo, sin clave) ---------- */
+var C_SUN  = '<g stroke="#F2B705" stroke-width="2.6" stroke-linecap="round" fill="none"><circle cx="32" cy="32" r="10"/><path d="M32 10v5M32 49v5M10 32h5M49 32h5M16.4 16.4l3.6 3.6M44 44l3.6 3.6M16.4 47.6l3.6-3.6M44 20l3.6-3.6"/></g>';
+var C_MOON = '<path d="M41 13a20 20 0 1 0 11 26A16 16 0 0 1 41 13z" fill="none" stroke="#B9C7E6" stroke-width="2.6" stroke-linejoin="round"/>';
+function cloud(dy){ return '<path transform="translate(0 '+dy+')" d="M19 46h27a10 10 0 0 0 1-20 14 14 0 0 0-27 3.5A8.3 8.3 0 0 0 19 46z" fill="#13296A" stroke="#FFFFFF" stroke-width="2.6" stroke-linejoin="round"/>'; }
+var C_PART = '<g transform="translate(-8 -8) scale(.8)">' + C_SUN + '</g>' + cloud(4);
+var C_FOG  = '<g stroke="#B9C7E6" stroke-width="2.6" stroke-linecap="round"><path d="M12 26h40M8 34h44M14 42h36M18 50h28"/></g>';
+var C_RAIN = cloud(-6) + '<g stroke="#7FB2FF" stroke-width="2.6" stroke-linecap="round"><path d="M24 46l-3 8M33 46l-3 8M42 46l-3 8"/></g>';
+var C_SNOW = cloud(-6) + '<g fill="#FFFFFF"><circle cx="24" cy="50" r="2.4"/><circle cx="33" cy="54" r="2.4"/><circle cx="42" cy="50" r="2.4"/></g>';
+var C_STRM = cloud(-6) + '<path d="M34 42l-6 9h6l-4 9 10-12h-6l4-6z" fill="#F2B705"/>';
+function weatherOf(code, day){
+  if (code === 0) return { svg: day ? C_SUN : C_MOON, es:'Despejado' };
+  if (code <= 2)  return { svg: day ? C_PART : cloud(0), es:'Parcial nublado' };
+  if (code === 3) return { svg: cloud(0), es:'Nublado' };
+  if (code === 45 || code === 48) return { svg: C_FOG, es:'Neblina' };
+  if (code >= 51 && code <= 67) return { svg: C_RAIN, es:'Lluvia' };
+  if ((code >= 71 && code <= 77) || code === 85 || code === 86) return { svg: C_SNOW, es:'Nieve' };
+  if (code >= 80 && code <= 82) return { svg: C_RAIN, es:'Chubascos' };
+  if (code >= 95) return { svg: C_STRM, es:'Tormenta eléctrica' };
+  return { svg: cloud(0), es:'' };
+}
+function renderWeather(w){
+  if (!w) return;
+  var info = weatherOf(w.weather_code, w.is_day === 1);
+  $('wIcon').innerHTML = '<svg viewBox="0 0 64 64">' + info.svg + '</svg>';
+  $('wTemp').textContent = Math.round(w.temperature_2m) + '°';
+  var wind = w.wind_speed_10m !== undefined ? ' · Viento <b>' + Math.round(w.wind_speed_10m) + ' km/h</b>' : '';
+  var line2 = w.storm ? '<span id="wStorm">Tormenta probable desde las ' + esc(w.storm) + '</span>'
+    : (w.tmax !== undefined ? 'Máx <b>' + Math.round(w.tmax) + '°</b> · Mín <b>' + Math.round(w.tmin) + '°</b>' : '');
+  $('wDesc').innerHTML = esc(info.es) + wind + (line2 ? '<br>' + line2 : '');
+}
+function weather(){
+  var c = window.__clima || (lastData && lastData.clima);
+  if (!c) return;
+  fetch('https://api.open-meteo.com/v1/forecast?latitude=' + c.lat + '&longitude=' + c.lon +
+        '&current=temperature_2m,weather_code,is_day,wind_speed_10m&hourly=weather_code&forecast_hours=6' +
+        '&daily=temperature_2m_max,temperature_2m_min&forecast_days=1&timezone=America%2FLima')
+    .then(function(r){ return r.json(); })
+    .then(function(j){
+      if (!j || !j.current) return;
+      var w = j.current;
+      if (j.daily && j.daily.temperature_2m_max) { w.tmax = j.daily.temperature_2m_max[0]; w.tmin = j.daily.temperature_2m_min[0]; }
+      w.storm = '';
+      if (j.hourly && j.hourly.weather_code) for (var i = 0; i < j.hourly.weather_code.length; i++) {
+        if (j.hourly.weather_code[i] >= 95) { w.storm = String(j.hourly.time[i]).slice(11, 16); break; }
+      }
+      store('weather', w); renderWeather(w);
+    })
+    .catch(function(){ renderWeather(load('weather')); });
+}
+
+/* ---------- reloj ---------- */
+function tick(){
+  var now = new Date();
+  $('clock').textContent = hhmm(now);
+  var ds = now.toLocaleDateString('es-PE', { timeZone:TZ, weekday:'long', day:'numeric', month:'long' });
+  $('date').textContent = ds.charAt(0).toUpperCase() + ds.slice(1);
+  stale();
+  // recarga diaria a las 04:00, salvo con alerta activa
+  var calma = !lastData || (!lastData.alerta && (lastData.semaforo || {}).estado === 'VERDE');
+  if (hhmm(now) === '04:00' && performance.now() > 120000 && calma && !DEMO) location.reload();
+}
+
+/* ---------- selector de pantallas ---------- */
+function renderPicker(l){
+  $('grid').innerHTML = l.length ? l.map(function(t){
+    return '<a class="tile" href="?area=' + encodeURIComponent(t.codigo) + '">' +
+      '<span class="c">' + esc(t.codigo) + '</span><span class="n">' + esc(t.nombre) + '</span>' +
+      '<span class="go">Abrir pantalla →</span></a>';
+  }).join('') : '<p class="sub">Cargando áreas…</p>';
+}
+var SIS = '', APK = '';
+function pickFoot(){ $('pickFoot').textContent = [SIS, APK, 'Contacto: mavillal@gmail.com'].filter(Boolean).join(' · '); }
+function showPicker(){
+  $('stage').style.display = 'none';
+  $('band').style.display = 'none';
+  $('picker').style.display = 'block';
+  document.body.style.cursor = 'auto';
+  renderPicker(load('areas') || []);
+  fetch(API + '?t=' + Date.now())
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if (d.listaAreas) { AREAS = d.listaAreas; store('areas', AREAS); renderPicker(AREAS); }
+      if (d.unidad) $('pickUnidad').textContent = 'Vigía HSE · ' + d.unidad;
+      SIS = 'Sistema ' + (d.version || '') + ' · ' + AREAS.length + ' pantallas';
+      pickFoot();
+    })
+    .catch(function(){ SIS = 'Sin conexión con el backend: se muestran las áreas guardadas.'; pickFoot(); });
+  fetch('https://api.github.com/repos/mavillal/vigia-hse/releases/latest')
+    .then(function(r){ return r.json(); })
+    .then(function(r){ if (r.tag_name) { APK = 'App TV ' + r.tag_name; pickFoot(); } })
+    .catch(function(){});
+}
+
+/* ---------- navegación anterior / siguiente ---------- */
+var navTimer = null;
+function areas(){ return AREAS.length ? AREAS : (load('areas') || []); }
+function navGo(delta){
+  var l = areas(), i = 0;
+  if (!l.length) return;
+  for (var k = 0; k < l.length; k++) if (l[k].codigo === AREA) i = k;
+  location.search = '?area=' + encodeURIComponent(l[(i + delta + l.length) % l.length].codigo);
+}
+function showNav(){
+  var l = areas(), i = 0;
+  if (DEMO || !l.length) return;
+  for (var k = 0; k < l.length; k++) if (l[k].codigo === AREA) i = k;
+  $('navPrev').textContent = '‹ ' + l[(i - 1 + l.length) % l.length].nombre;
+  $('navNext').textContent = l[(i + 1) % l.length].nombre + ' ›';
+  $('navCur').textContent = l[i].nombre;
+  $('nav').style.display = 'flex';
+  document.body.classList.add('navon');
+  clearTimeout(navTimer);
+  navTimer = setTimeout(function(){ $('nav').style.display = 'none'; document.body.classList.remove('navon'); }, 3500);
+}
+function bindNav(){
+  $('navPrev').onclick = function(){ navGo(-1); };
+  $('navNext').onclick = function(){ navGo(1); };
+  $('navAll').onclick = function(){ location.search = ''; };
+  document.addEventListener('mousemove', showNav);
+  document.addEventListener('touchstart', showNav);
+  document.addEventListener('keydown', function(e){
+    if (e.key === 'ArrowRight') navGo(1);
+    else if (e.key === 'ArrowLeft') navGo(-1);
+    else if (e.key === 'Escape') location.search = '';
+  });
+}
+
+/* ---------- arranque ---------- */
+if (!AREA) {
+  showPicker();
+} else {
+  $('areaName').textContent = AREA;
+  if (DEMO) { $('demoTag').style.display = 'block'; document.body.style.cursor = 'auto'; }
+  showEmpty(true);
+  var cached = !DEMO && load('data_' + AREA);
+  if (cached) { lastOk = cached.savedAt || 0; apply(cached); }
+  renderWeather(load('weather'));
+  refresh(); setInterval(refresh, REFRESH_MS);
+  setInterval(weather, WEATHER_MS);
+  tick(); setInterval(tick, 5000);
+  bindNav();
+}
+</script>
+</body>
+</html>

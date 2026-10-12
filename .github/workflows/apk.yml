@@ -1,0 +1,63 @@
+name: Compilar APK
+
+on:
+  push:
+    paths:
+      - 'android/**'
+      - '.github/workflows/apk.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0   # historial completo: el número de versión = cantidad de commits
+
+      # versionCode siempre creciente aunque se renombre o recree este workflow (Android rechaza bajar de versión).
+      - name: Número de versión
+        run: echo "VERSION_CODE=$(git rev-list --count HEAD)" >> "$GITHUB_ENV"
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Preparar firma
+        env:
+          KEYSTORE_B64: ${{ secrets.KEYSTORE_B64 }}
+        run: |
+          # Sin la firma real NO se publica: un APK con otra firma obliga a desinstalar en todos los stick ya instalados.
+          if [ -z "$KEYSTORE_B64" ]; then
+            echo "::error::Falta el secreto KEYSTORE_B64 (firma del APK). No se publica nada."
+            exit 1
+          fi
+          echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/vigia.jks"
+          echo "KEYSTORE_PATH=$RUNNER_TEMP/vigia.jks" >> "$GITHUB_ENV"
+
+      - name: Compilar
+        working-directory: android
+        env:
+          KEYSTORE_PASS: ${{ secrets.KEYSTORE_PASS }}
+          PLAYER_URL: ${{ vars.PLAYER_URL }}
+          API_URL: ${{ vars.API_URL }}
+        run: gradle assembleRelease --no-daemon
+
+      - name: Renombrar
+        run: cp android/app/build/outputs/apk/release/app-release.apk vigia-hse.apk
+
+      - name: Publicar release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0.${{ env.VERSION_CODE }}
+          name: Vigía HSE v1.0.${{ env.VERSION_CODE }}
+          files: vigia-hse.apk
+          make_latest: true
