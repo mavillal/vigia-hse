@@ -24,7 +24,7 @@
  * Publicar: desde apps-script/ con clasp (ver CLAUDE.md). Si se agregan hojas o columnas: menú Vigía HSE → Instalar / reparar.
  */
 
-const VERSION = 'v1.0';
+const VERSION = 'v1.1';
 const APP = 'Vigía HSE';
 const TZ = 'America/Lima';
 const DEFAULT_DUR = 12;          // segundos por aviso
@@ -787,6 +787,7 @@ function onOpen() {
 /** Crea o repara hojas, Form y disparadores. Se puede correr las veces que haga falta. */
 function setup() {
   const ss = SpreadsheetApp.getActive();
+  ss.setSpreadsheetTimeZone(TZ);   // la planilla nace con la zona de quien la crea; las horas deben ser de Lima
 
   prepararAreas_();
   prepararControl_();

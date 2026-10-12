@@ -35,7 +35,7 @@ const sheets = {}; const order = [];
 const ss = {
   getSheetByName:n=>sheets[n]||null, insertSheet:n=>{ order.push(n); return (sheets[n]=new Sheet(n)); },
   deleteSheet:s=>{ delete sheets[s.name]; order.splice(order.indexOf(s.name),1); },
-  getSheets:()=>order.map(n=>sheets[n]), getId:()=>'ssid', getUrl:()=>'https://docs.google.com/spreadsheets/d/ssid', toast:m=>console.log('  [toast]',m)
+  getSheets:()=>order.map(n=>sheets[n]), getId:()=>'ssid', setSpreadsheetTimeZone(tz){ ss.tz=tz; }, getUrl:()=>'https://docs.google.com/spreadsheets/d/ssid', toast:m=>console.log('  [toast]',m)
 };
 const props = {};
 global.SpreadsheetApp = { getActive:()=>ss, flush(){}, getUi:()=>({createMenu:()=>({addItem(){return this},addSeparator(){return this},addToUi(){}})}),
@@ -95,7 +95,7 @@ check(Object.keys(sheets).filter(n=>/^Respuestas/.test(n)).length===1 && trigger
 
 console.log('\n2) Pantalla de un área');
 const g = get({area:'GARITA'});
-check(g.version==='v1.0' && g.areaNombre==='Garita de ingreso', 'GARITA → "Garita de ingreso"');
+check(g.version==='v1.1' && ss.tz==='America/Lima' && g.areaNombre==='Garita de ingreso', 'GARITA → "Garita de ingreso" y planilla en hora de Lima');
 check(g.semaforo.estado==='VERDE' && /Sin tormenta/.test(g.semaforo.mensaje), 'semáforo inicial VERDE con su mensaje');
 check(g.alerta===null, 'sin alerta urgente');
 check(g.cinta.length===2 && get({area:'TALLER'}).cinta.length===3, 'cinta: el aviso solo de TALLER no sale en GARITA');
