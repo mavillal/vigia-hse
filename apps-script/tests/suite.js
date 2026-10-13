@@ -95,7 +95,7 @@ check(Object.keys(sheets).filter(n=>/^Respuestas/.test(n)).length===1 && trigger
 
 console.log('\n2) Pantalla de un área');
 const g = get({area:'GARITA'});
-check(g.version==='v1.1' && ss.tz==='America/Lima' && g.areaNombre==='Garita de ingreso', 'GARITA → "Garita de ingreso" y planilla en hora de Lima');
+check(g.version==='v1.2' && ss.tz==='America/Lima' && g.areaNombre==='Garita de ingreso', 'GARITA → "Garita de ingreso" y planilla en hora de Lima');
 check(g.semaforo.estado==='VERDE' && /Sin tormenta/.test(g.semaforo.mensaje), 'semáforo inicial VERDE con su mensaje');
 check(g.alerta===null, 'sin alerta urgente');
 check(g.cinta.length===2 && get({area:'TALLER'}).cinta.length===3, 'cinta: el aviso solo de TALLER no sale en GARITA');
@@ -127,6 +127,14 @@ check(gu.urgente && gu.items.length===1 && gu.items[0].titulo==='Evacuación por
 R.set(R.getLastRow(), col('Activo'), false); alEditar({range:R.getRange(R.getLastRow(), col('Activo'))});
 submit({'Texto para la cinta':'Simulacro de sismo el jueves 10:00','Título':'Simulacro','Desde':ayer,'Hasta':manana,'Áreas':'Comedor del campamento','Prioridad':'Normal','Publicado por':'HSE'});
 check(get({area:'COMEDOR'}).cinta.some(x=>x.es==='Simulacro de sismo el jueves 10:00') && !get({area:'GARITA'}).cinta.some(x=>/Simulacro/.test(x.es)), 'texto para la cinta solo en COMEDOR');
+check(!sheets['Cinta'].d.some(r=>/Simulacro/.test(r[0])), 'la cinta del Form no se copia a la hoja Cinta');
+ctlSet('aprobacion','Sí'); mails.length = 0;
+const rCin = submit({'Texto para la cinta':'Reporte flash: revise las recomendaciones','Título':'Reporte','Desde':ayer,'Hasta':manana,'Áreas':'Todas','Prioridad':'Normal','Publicado por':'HSE'});
+check(!get({area:'GARITA'}).cinta.some(x=>/Reporte flash/.test(x.es)) && mails.some(m=>/pendiente de aprobación/.test(m.subj)), 'con aprobación obligatoria, la cinta del Form espera y avisa por correo');
+R.set(rCin, col('Aprobado'), true); alEditar({range:R.getRange(rCin, col('Aprobado'))});
+check(get({area:'GARITA'}).cinta.some(x=>/Reporte flash/.test(x.es)), 'al aprobar, aparece en la cinta');
+R.set(rCin, col('Hasta'), ayer);
+check(!get({area:'GARITA'}).cinta.some(x=>/Reporte flash/.test(x.es)), 'vencida, sale de la cinta');
 
 console.log('\n4) Sala de control: clave, semáforo y alerta');
 const clave = ctlVal('clave');

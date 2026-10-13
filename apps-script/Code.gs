@@ -24,7 +24,7 @@
  * Publicar: desde apps-script/ con clasp (ver CLAUDE.md). Si se agregan hojas o columnas: menú Vigía HSE → Instalar / reparar.
  */
 
-const VERSION = 'v1.1';
+const VERSION = 'v1.2';
 const APP = 'Vigía HSE';
 const TZ = 'America/Lima';
 const DEFAULT_DUR = 12;          // segundos por aviso
@@ -254,17 +254,34 @@ function getCinta_(area) {
     if (!matchArea_(g(r, ix.areas) || 'Todas', area)) return;
     out.push({ es: texto });
   });
-  return out;
+  return out.concat(cintaForm_(area));
 }
 
-function agregarACinta_(texto, areas, hasta) {
-  const sh = SpreadsheetApp.getActive().getSheetByName(SHEET_CINTA) || prepararCinta_();
-  const ix = cintaIdx_(sh);
-  const row = lastTextRow_(sh, ix.texto) + 1;
-  sh.getRange(row, ix.texto).setValue(texto);
-  if (ix.areas) sh.getRange(row, ix.areas).setValue(areas || 'Todas');
-  if (ix.hasta && hasta) sh.getRange(row, ix.hasta).setValue(hasta);
-  if (ix.activo) sh.getRange(row, ix.activo).insertCheckboxes().setValue(true);
+/** "Texto para la cinta" del Form: se lee desde las respuestas para que también espere la aprobación de HSE. */
+function cintaForm_(area) {
+  const sh = hojaAvisos_();
+  if (!sh || sh.getLastRow() < 2) return [];
+  const data = sh.getDataRange().getValues();
+  const h = data[0];
+  const ix = { cinta: colOf_(h, Q.cinta), desde: colOf_(h, Q.desde), hasta: colOf_(h, Q.hasta), areas: colOf_(h, Q.areas),
+               aprobado: colOf_(h, C.aprobado), activo: colOf_(h, C.activo) };
+  if (ix.cinta < 0) return [];
+  const now = Date.now();
+  const out = [];
+  for (let i = 1; i < data.length; i++) {
+    const r = data[i];
+    const texto = String(r[ix.cinta] || '').trim();
+    if (!texto) continue;
+    if (ix.activo > -1 && isNo_(r[ix.activo])) continue;
+    if (ix.aprobado > -1 && isNo_(r[ix.aprobado])) continue;
+    const ini = ix.desde > -1 ? toDate_(r[ix.desde]) : null;
+    const fin = ix.hasta > -1 ? endOf_(toDate_(r[ix.hasta])) : null;
+    if (ini && now < ini.getTime()) continue;
+    if (fin && now > fin.getTime()) continue;
+    if (!matchArea_(ix.areas > -1 ? r[ix.areas] : 'Todas', area)) continue;
+    out.push({ es: texto });
+  }
+  return out;
 }
 
 /** Indicadores de la hoja + días sin accidentes incapacitantes (Control). */
@@ -564,8 +581,6 @@ function procesarForm_(e) {
   const requiere = isYes_(textoControl_(SpreadsheetApp.getActive().getSheetByName(SHEET_CONTROL) || prepararControl_(), 'aprobacion'));
   sh.getRange(row, ensureCol_(sh, C.aprobado)).insertCheckboxes().setValue(!requiere);
 
-  if (cinta) agregarACinta_(cinta, areas, celda(Q.hasta));
-
   let resultado = '';
   if (id) {
     try {
@@ -593,6 +608,7 @@ function procesarForm_(e) {
   } else {
     setCol(C.tipo, 'solo cinta');
   }
+  if (cinta && !resultado) resultado = 'cinta';      // el texto de la cinta también espera la aprobación
 
   if (requiere && resultado) {
     alertar_('Aviso pendiente de aprobación: ' + (titulo || 'sin título'),
