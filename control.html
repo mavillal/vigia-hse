@@ -71,6 +71,9 @@
 <main>
   <section class="card" id="login">
     <h2>Ingresar</h2>
+    <p class="hint" style="margin:0 0 6px">Esta página es para el operador de la sala de control y el jefe de HSE. Desde aquí se cambia el semáforo de tormenta,
+      se publica una alerta urgente, se aprueban avisos y se informa cuántos trabajadores hay en la unidad. Todo aparece en las pantallas en menos de 30 segundos.</p>
+    <p class="hint" style="margin:0">La clave está en la planilla <b>Vigía HSE</b>, hoja <b>Control</b>, fila "Clave de la sala de control".</p>
     <form id="fLogin">
       <label for="clave">Clave de la sala de control</label>
       <input id="clave" type="password" inputmode="numeric" autocomplete="current-password" required>
@@ -99,6 +102,7 @@
 
     <section class="card">
       <h2>Alerta urgente en todas las pantallas</h2>
+      <p class="hint" style="margin:-4px 0 10px">Para una emergencia que no es tormenta (sismo, derrame, evacuación). Ocupa todas las pantallas hasta que la quites.</p>
       <div id="alertaNow"></div>
       <label for="alTxt">Texto de la alerta</label>
       <textarea id="alTxt" rows="3" maxlength="300" placeholder="Ej.: Sismo. Evacúe a la zona segura y espere instrucciones de su supervisor."></textarea>
@@ -111,12 +115,14 @@
 
     <section class="card">
       <h2>Avisos por aprobar</h2>
+      <p class="hint" style="margin:-4px 0 10px">Avisos enviados por el formulario que esperan el visto bueno de HSE. Al aprobar, salen en pantalla.</p>
       <div class="list" id="pend"></div>
       <div class="err" id="ePend" role="alert"></div>
     </section>
 
     <section class="card">
       <h2>Trabajadores laborando ahora</h2>
+      <p class="hint" style="margin:-4px 0 0">Actualízalo al cambio de guardia. Si dejas ambos vacíos, el dato desaparece de las pantallas.</p>
       <div class="row" style="align-items:flex-end">
         <div style="flex:1;min-width:140px"><label for="tProp">Personal propio</label><input id="tProp" type="text" inputmode="numeric" placeholder="Ej.: 1248"></div>
         <div style="flex:1;min-width:140px"><label for="tCont">Personal de contrata</label><input id="tCont" type="text" inputmode="numeric" placeholder="Ej.: 652"></div>
@@ -128,11 +134,13 @@
 
     <section class="card">
       <h2>Pantallas</h2>
+      <p class="hint" style="margin:-4px 0 10px">Si una pantalla lleva más de 3 minutos sin señal, revisa la energía y el wifi del TV.</p>
       <div class="list" id="pant"></div>
     </section>
 
     <section class="card">
       <h2>Bitácora</h2>
+      <p class="hint" style="margin:-4px 0 10px">Últimos cambios del semáforo, alertas, aprobaciones y trabajadores. El registro completo está en la hoja Bitácora.</p>
       <div class="list" id="bit"></div>
     </section>
   </div>
