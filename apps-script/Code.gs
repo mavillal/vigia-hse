@@ -24,7 +24,7 @@
  * Publicar: desde apps-script/ con clasp (ver CLAUDE.md). Si se agregan hojas o columnas: menú Vigía HSE → Instalar / reparar.
  */
 
-const VERSION = 'v1.3';
+const VERSION = 'v1.4';
 const APP = 'Vigía HSE';
 const TZ = 'America/Lima';
 const DEFAULT_DUR = 12;          // segundos por aviso
@@ -73,7 +73,7 @@ const CONTROL = [
   ['latitud',          'Latitud (clima)', '-16.53'],
   ['longitud',         'Longitud (clima)', '-71.59'],
   ['correo',           'Correo para alertas', CORREO_DEFECTO],
-  ['sin senal',        'Avisar si una pantalla pasa estos minutos sin señal', '15'],
+  ['sin senal',        'Correo si una pantalla pasa estos minutos sin señal (No = no enviar)', 'No'],
   ['formulario',       'Link del formulario para publicar', '']
 ];
 
@@ -837,8 +837,9 @@ function logPing_(area) {
 /** Disparador cada 10 min: correo cuando una pantalla se cae o vuelve. */
 function revisarPantallas() {
   const sh = SpreadsheetApp.getActive().getSheetByName(SHEET_CONTROL);
-  const lim = Number(sh ? textoControl_(sh, 'sin senal') : '') || 15;
+  const lim = Number(sh ? textoControl_(sh, 'sin senal') : '');
   const pr = PropertiesService.getScriptProperties();
+  if (!(lim > 0)) { pr.setProperty('caidas', '{}'); return; }   // correo desactivado en Control ("No" o vacío)
   let caidas = {};
   try { caidas = JSON.parse(pr.getProperty('caidas') || '{}'); } catch (e) {}
   const nuevas = [], vueltas = [];

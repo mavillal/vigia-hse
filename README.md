@@ -12,7 +12,7 @@ cuando la sala de control activa una alerta.
   en la hoja Asistencia, con su empresa si es de contrata.
 - **Avisos con aprobación de HSE.** Se publican desde un Google Form y salen solo cuando HSE marca "Aprobado".
 - **Indicadores y cinta.** Días sin accidentes incapacitantes, índices y mensajes de seguridad por área.
-- **Pantalla sin señal.** Si un TV pierde la conexión lo dice en pantalla y avisa por correo: nunca muestra
+- **Pantalla sin señal.** Si un TV pierde la conexión lo dice en pantalla y lo marca en la sala de control: nunca muestra
   un semáforo viejo como si estuviera vigente.
 
 El sistema complementa la sirena, la radio y el detector de tormentas de la unidad. No los reemplaza.

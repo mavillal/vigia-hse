@@ -98,7 +98,7 @@ check(Object.keys(sheets).filter(n=>/^Respuestas/.test(n)).length===1 && trigger
 
 console.log('\n2) Pantalla de un área');
 const g = get({area:'GARITA'});
-check(g.version==='v1.3' && ss.tz==='America/Lima' && g.areaNombre==='Garita de ingreso', 'GARITA → "Garita de ingreso" y planilla en hora de Lima');
+check(g.version==='v1.4' && ss.tz==='America/Lima' && g.areaNombre==='Garita de ingreso', 'GARITA → "Garita de ingreso" y planilla en hora de Lima');
 check(g.semaforo.estado==='VERDE' && /Sin tormenta/.test(g.semaforo.mensaje), 'semáforo inicial VERDE con su mensaje');
 check(g.alerta===null, 'sin alerta urgente');
 check(g.cinta.length===2 && get({area:'TALLER'}).cinta.length===3, 'cinta: el aviso solo de TALLER no sale en GARITA');
@@ -197,6 +197,9 @@ check(E.getLastRow()===3 && !E.d.some(r=>r[0]==='XXX'), 'Estado anota GARITA y T
 cacheOn = false;
 mails.length = 0;
 E.set(2,3,new Date(Date.now()-40*60000));
+revisarPantallas();
+check(mails.length===0, 'por defecto ("No") no se envía correo por pantalla sin señal');
+ctlSet('sin senal','15');
 revisarPantallas();
 check(mails.length===1 && /Pantalla sin señal: Garita de ingreso/.test(mails[0].subj), 'correo: GARITA lleva 40 min sin señal');
 revisarPantallas();
