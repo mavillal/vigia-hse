@@ -24,13 +24,15 @@
  * Publicar: desde apps-script/ con clasp (ver CLAUDE.md). Si se agregan hojas o columnas: menú Vigía HSE → Instalar / reparar.
  */
 
-const VERSION = 'v1.2';
+const VERSION = 'v1.3';
 const APP = 'Vigía HSE';
 const TZ = 'America/Lima';
 const DEFAULT_DUR = 12;          // segundos por aviso
 const CACHE_S = 60;              // segundos que se reutiliza la respuesta de un área
 const PING_CADA_S = 120;         // cada cuánto se anota la conexión de un área en Estado
-const CORREO_DEFECTO = 'mavillal@gmail.com';
+const CORREO_DEFECTO = 'mario@safetymind.ai';
+const WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbzCVG8fk5Skg7hQGiO_NB5dgpMxMiBMKJbR_oa-seOWnM7cp_VcJEqFmqk3ElNTW8yM/exec';
+const BIENVENIDA_DEFECTO = 'Su seguridad y la de sus compañeros es lo primero.';
 const ESTADOS = ['VERDE', 'AMARILLA', 'ROJA'];
 
 const SHEET_AREAS    = 'Áreas';
@@ -55,6 +57,9 @@ const C = { url: 'URL', tipo: 'Tipo', id: 'ID', aprobado: 'Aprobado', activo: 'A
 // Hoja Control: [clave buscada en la etiqueta, etiqueta, valor inicial, tipo]
 const CONTROL = [
   ['nombre de la unidad', 'Nombre de la unidad minera', 'Unidad minera'],
+  ['mensaje de bienvenida', 'Mensaje de bienvenida (al encender y cuando no hay avisos)', BIENVENIDA_DEFECTO],
+  ['personal propio',  'Trabajadores laborando ahora: personal propio', ''],
+  ['personal de contrata', 'Trabajadores laborando ahora: personal de contrata', ''],
   ['recargar',         '🔄 Recargar todas las pantallas (marca la casilla)', false, 'casilla'],
   ['semaforo',         'Semáforo de tormenta eléctrica', 'VERDE', 'semaforo'],
   ['alerta verde',     'Mensaje con alerta verde', 'Sin tormenta eléctrica cercana. Trabajos a la intemperie permitidos.'],
@@ -90,6 +95,7 @@ const IND_INICIALES = [
 function doGet(e) {
   const p = (e && e.parameter) || {};
   if (p.charla) return json_(charlaInfo_(String(p.charla)));
+  if (p.aprobar) return aprobarPorLink_(String(p.aprobar), String(p.t || ''));
   const area = String(p.area || '').trim().toUpperCase();
   if (p.ping) logPing_(area);
   return ContentService.createTextOutput(respuesta_(area)).setMimeType(ContentService.MimeType.JSON);
@@ -100,7 +106,7 @@ function doPost(e) {
   try { b = JSON.parse((e && e.postData && e.postData.contents) || '{}'); } catch (err) { return json_({ ok: false, error: 'Solicitud inválida.' }); }
   const acc = String(b.accion || '');
   if (acc === 'asistencia') return json_(conLock_(() => registrarAsistencia_(b)));
-  if (acc === 'estado' || acc === 'semaforo' || acc === 'alerta') {
+  if (['estado', 'semaforo', 'alerta', 'trabajadores', 'aprobar'].indexOf(acc) > -1) {
     const chk = claveOk_(b.clave);
     if (!chk.ok) return json_(chk);
     const quien = String(b.quien || '').trim().slice(0, 60);
@@ -113,6 +119,16 @@ function doPost(e) {
     if (acc === 'alerta') {
       if (!quien) return json_({ ok: false, error: 'Escribe quién hace el cambio.' });
       conLock_(() => setAlerta_(String(b.texto || '').trim().slice(0, 300), quien, 'Sala de control'));
+    }
+    if (acc === 'trabajadores') {
+      const pr = numero_(b.propios), co = numero_(b.contratas);
+      if ((b.propios !== '' && pr === null) || (b.contratas !== '' && co === null)) return json_({ ok: false, error: 'Escribe solo números de trabajadores.' });
+      conLock_(() => setTrabajadores_(pr, co, quien || 'Sala de control'));
+    }
+    if (acc === 'aprobar') {
+      if (!quien) return json_({ ok: false, error: 'Escribe quién aprueba.' });
+      const r = conLock_(() => aprobarAviso_(String(b.id || ''), quien, 'Sala de control'));
+      if (!r.ok) return json_(r);
     }
     return json_(estadoSala_());
   }
@@ -139,14 +155,17 @@ function respuesta_(area) {
   const areas = getListaAreas_();
   const info = areas.filter(a => a.codigo === area)[0] || null;
   const ctl = getControl_();
-  const out = info ? getPlaylist_(info) : { items: [], urgente: false };
+  const avisos = leerAvisos_();                                  // una sola lectura para avisos y cinta
+  const out = info ? getPlaylist_(info, avisos) : { items: [], urgente: false };
   out.version     = VERSION;
   out.generado    = new Date().toISOString();
   out.area        = area;
   out.areaNombre  = info ? info.nombre : '';
   out.unidad      = ctl.unidad;
   out.listaAreas  = areas;
-  out.cinta       = info ? getCinta_(info) : [];
+  out.cinta       = info ? getCinta_(info, avisos) : [];
+  out.bienvenida  = ctl.bienvenida;
+  out.trabajadores = ctl.trabajadores;
   out.indicadores = getIndicadores_(ctl);
   out.semaforo    = ctl.semaforo;
   out.alerta      = ctl.alerta;
@@ -176,10 +195,21 @@ function hojaAvisos_() {
   return null;
 }
 
-function getPlaylist_(area) {
+/** Todas las filas de la hoja de respuestas (con encabezado), o [] si no hay. */
+function leerAvisos_() {
   const sh = hojaAvisos_();
-  if (!sh || sh.getLastRow() < 2) return { urgente: false, items: [] };
-  const data = sh.getDataRange().getValues();
+  return sh && sh.getLastRow() >= 2 ? sh.getDataRange().getValues() : [];
+}
+
+/** "10", "10 s", "12,5" → segundos (mínimo 3, máximo 600). Vacío o inválido → DEFAULT_DUR. */
+function duracion_(v) {
+  const n = parseFloat(String(v === null || v === undefined ? '' : v).replace(',', '.'));
+  return isFinite(n) && n >= 3 ? Math.min(Math.round(n * 10) / 10, 600) : DEFAULT_DUR;
+}
+
+function getPlaylist_(area, avisos) {
+  const data = avisos || leerAvisos_();
+  if (data.length < 2) return { urgente: false, items: [] };
   const h = data[0];
   const col = name => colOf_(h, name);
   const ix = {
@@ -211,7 +241,7 @@ function getPlaylist_(area) {
       url:       url,
       tipo:      tipo,
       texto:     tipo === 'texto' ? val(r, ix.texto) : '',
-      dur:       Number(r[ix.dur]) > 0 ? Number(r[ix.dur]) : DEFAULT_DUR,
+      dur:       ix.dur > -1 ? duracion_(r[ix.dur]) : DEFAULT_DUR,
       urgente:   /urgente/i.test(val(r, ix.prio)),
       link:      val(r, ix.link),
       charla:    /charla/i.test(cat) ? val(r, ix.id) : '',
@@ -235,12 +265,12 @@ function cintaIdx_(sh) {
   };
 }
 
-function getCinta_(area) {
+function getCinta_(area, avisos) {
   const sh = SpreadsheetApp.getActive().getSheetByName(SHEET_CINTA);
-  if (!sh) return [];
+  if (!sh) return cintaForm_(area, avisos);
   const ix = cintaIdx_(sh);
   const last = lastTextRow_(sh, ix.texto);
-  if (last < 2) return [];
+  if (last < 2) return cintaForm_(area, avisos);
   const rows = sh.getRange(2, 1, last - 1, sh.getLastColumn()).getValues();
   const g = (r, c) => (c > 0 ? r[c - 1] : '');
   const now = Date.now();
@@ -254,14 +284,13 @@ function getCinta_(area) {
     if (!matchArea_(g(r, ix.areas) || 'Todas', area)) return;
     out.push({ es: texto });
   });
-  return out.concat(cintaForm_(area));
+  return out.concat(cintaForm_(area, avisos));
 }
 
 /** "Texto para la cinta" del Form: se lee desde las respuestas para que también espere la aprobación de HSE. */
-function cintaForm_(area) {
-  const sh = hojaAvisos_();
-  if (!sh || sh.getLastRow() < 2) return [];
-  const data = sh.getDataRange().getValues();
+function cintaForm_(area, avisos) {
+  const data = avisos || leerAvisos_();
+  if (data.length < 2) return [];
   const h = data[0];
   const ix = { cinta: colOf_(h, Q.cinta), desde: colOf_(h, Q.desde), hasta: colOf_(h, Q.hasta), areas: colOf_(h, Q.areas),
                aprobado: colOf_(h, C.aprobado), activo: colOf_(h, C.activo) };
@@ -333,14 +362,31 @@ function estado_(v) {
   return 'VERDE';
 }
 
+/** Control leído de una vez: [{k: etiqueta normalizada, v: valor, t: texto visible}]. */
+function controlMapa_(sh) {
+  if (!sh || sh.getLastRow() < 1) return [];
+  const rg = sh.getRange(1, 1, sh.getLastRow(), 2);
+  const v = rg.getValues(), d = rg.getDisplayValues();
+  return v.map((r, i) => ({ k: norm_(r[0]), v: r[1], t: String(d[i][1] || '').trim() }));
+}
+function deMapa_(m, clave) { for (const x of m) if (x.k.indexOf(clave) > -1) return x; return { v: '', t: '' }; }
+
+/** "1.248", "1248", "1 248" → 1248. Vacío o sin dígitos → null. */
+function numero_(v) {
+  const t = String(v === null || v === undefined ? '' : v).replace(/[\s.,]/g, '');
+  return /^\d{1,6}$/.test(t) ? Number(t) : null;
+}
+
 function getControl_() {
   const sh = SpreadsheetApp.getActive().getSheetByName(SHEET_CONTROL);
   const pr = PropertiesService.getScriptProperties();
   const recarga = pr.getProperty('recarga') || '1';
-  const t = k => (sh ? textoControl_(sh, k) : '');
+  const m = controlMapa_(sh);
+  const t = k => deMapa_(m, k).t;
   const est = estado_(t('semaforo'));
   const alerta = t('alerta urgente');
-  const fecha = sh ? valorControl_(sh, 'ultimo accidente') : '';
+  const fecha = deMapa_(m, 'ultimo accidente').v;
+  const propios = numero_(t('personal propio')), contratas = numero_(t('personal de contrata'));
   const lat = parseFloat(t('latitud').replace(',', '.')), lon = parseFloat(t('longitud').replace(',', '.'));
   return {
     recarga: recarga,
@@ -352,6 +398,11 @@ function getControl_() {
     },
     alerta: alerta ? { texto: alerta, desde: pr.getProperty('alertaDesde') || '' } : null,
     central: t('central'),
+    bienvenida: t('mensaje de bienvenida') || BIENVENIDA_DEFECTO,
+    trabajadores: propios === null && contratas === null ? null : {
+      total: (propios || 0) + (contratas || 0), propios: propios, contratas: contratas,
+      desde: pr.getProperty('trabajadoresDesde') || ''
+    },
     ultimoAccidente: fecha instanceof Date ? fecha : toDate_(fecha),
     clima: isFinite(lat) && isFinite(lon) ? { lat: lat, lon: lon } : null
   };
@@ -415,6 +466,88 @@ function semaforoAmarilla() { setSemaforo_('AMARILLA', usuario_(), 'Menú de la 
 function semaforoRoja()     { setSemaforo_('ROJA', usuario_(), 'Menú de la planilla');     toast_('Semáforo ROJA enviado a las pantallas.'); }
 function toast_(m) { try { SpreadsheetApp.getActive().toast(m, APP, 8); } catch (e) {} }
 
+/* ---------------- Trabajadores laborando ---------------- */
+
+function setTrabajadores_(propios, contratas, quien) {
+  const sh = SpreadsheetApp.getActive().getSheetByName(SHEET_CONTROL) || prepararControl_();
+  const a = celdaControl_(sh, 'personal propio'), b = celdaControl_(sh, 'personal de contrata');
+  if (a) a.setValue(propios === null ? '' : propios);
+  if (b) b.setValue(contratas === null ? '' : contratas);
+  PropertiesService.getScriptProperties().setProperty('trabajadoresDesde', new Date().toISOString());
+  registrar_('Trabajadores laborando', 'Propios ' + (propios === null ? '—' : propios) + ' · Contratas ' + (contratas === null ? '—' : contratas), quien, 'Sala de control');
+  limpiarCache_();
+}
+
+/* ---------------- Aprobación de avisos ---------------- */
+
+function secreto_() {
+  const pr = PropertiesService.getScriptProperties();
+  let s = pr.getProperty('secreto');
+  if (!s) { s = Utilities.getUuid() + Utilities.getUuid(); pr.setProperty('secreto', s); }
+  return s;
+}
+function token_(id) {
+  return Utilities.base64EncodeWebSafe(Utilities.computeHmacSha256Signature(String(id), secreto_())).slice(0, 22);
+}
+function linkAprobar_(id) { return WEBAPP_URL + '?aprobar=' + encodeURIComponent(id) + '&t=' + token_(id); }
+
+/** Marca "Aprobado" en el aviso con ese ID y lo deja en la bitácora. */
+function aprobarAviso_(id, quien, origen) {
+  const sh = hojaAvisos_();
+  if (!id || !sh || sh.getLastRow() < 2) return { ok: false, error: 'No encontramos ese aviso.' };
+  const data = sh.getDataRange().getValues();
+  const h = data[0], cId = colOf_(h, C.id), cAp = colOf_(h, C.aprobado), cT = colOf_(h, Q.titulo);
+  if (cId < 0 || cAp < 0) return { ok: false, error: 'La hoja de respuestas no tiene las columnas ID y Aprobado: corre Instalar / reparar.' };
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][cId]).trim() !== id) continue;
+    const titulo = cT > -1 ? String(data[i][cT] || '') : '';
+    if (data[i][cAp] === true) return { ok: true, ya: true, titulo: titulo };
+    sh.getRange(i + 1, cAp + 1).setValue(true);
+    registrar_('Aviso aprobado', titulo, quien, origen);
+    limpiarCache_();
+    return { ok: true, titulo: titulo };
+  }
+  return { ok: false, error: 'No encontramos ese aviso.' };
+}
+
+/** Link "Aprobar" del correo: aprueba con un toque desde el celular. */
+function aprobarPorLink_(id, t) {
+  let titulo = 'Aviso', msg;
+  if (!t || t !== token_(id)) msg = 'Este link de aprobación no es válido.';
+  else {
+    const r = conLock_(() => aprobarAviso_(id, 'Link del correo', 'Correo'));
+    titulo = r.titulo || titulo;
+    msg = !r.ok ? r.error : r.ya ? 'Este aviso ya estaba aprobado.' : 'Aprobado. Aparece en las pantallas en menos de 30 segundos.';
+  }
+  const esc = x => String(x).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  return HtmlService.createHtmlOutput(
+    '<div style="font-family:system-ui,sans-serif;max-width:520px;margin:40px auto;padding:0 20px;color:#0F1B33">' +
+    '<div style="font-size:13px;letter-spacing:.2em;text-transform:uppercase;color:#2563EB;font-weight:700">' + APP + '</div>' +
+    '<h1 style="font-size:26px;margin:8px 0 12px">' + esc(titulo) + '</h1><p style="font-size:18px">' + esc(msg) + '</p></div>')
+    .setTitle(APP + ' · Aprobación').addMetaTag('viewport', 'width=device-width, initial-scale=1');
+}
+
+/** Avisos esperando aprobación (vigentes o futuros), para la sala de control. */
+function pendientes_() {
+  const data = leerAvisos_();
+  if (data.length < 2) return [];
+  const h = data[0], c = n => colOf_(h, n);
+  const ix = { id: c(C.id), ap: c(C.aprobado), ac: c(C.activo), url: c(C.url), cinta: c(Q.cinta), t: c(Q.titulo),
+               cat: c(Q.categoria), autor: c(Q.autor), areas: c(Q.areas), hasta: c(Q.hasta) };
+  if (ix.id < 0 || ix.ap < 0) return [];
+  const now = Date.now();
+  const out = [];
+  for (let i = 1; i < data.length; i++) {
+    const r = data[i], g = k => (ix[k] > -1 ? String(r[ix[k]] === null ? '' : r[ix[k]]).trim() : '');
+    if (!isNo_(r[ix.ap]) || (ix.ac > -1 && isNo_(r[ix.ac]))) continue;
+    if (!g('url') && !g('cinta')) continue;
+    const fin = ix.hasta > -1 ? endOf_(toDate_(r[ix.hasta])) : null;
+    if (fin && now > fin.getTime()) continue;
+    out.push({ id: g('id'), titulo: g('t') || g('cinta').slice(0, 60), categoria: g('cat'), autor: g('autor'), areas: g('areas') });
+  }
+  return out;
+}
+
 /* ---------------- Sala de control ---------------- */
 
 /** Clave de la sala de control, con bloqueo de 10 min tras 10 intentos fallidos. */
@@ -445,7 +578,7 @@ function estadoSala_() {
     }));
   }
   return { ok: true, version: VERSION, unidad: ctl.unidad, semaforo: ctl.semaforo, alerta: ctl.alerta,
-           bitacora: bitacora, pantallas: pantallas_() };
+           trabajadores: ctl.trabajadores, pendientes: pendientes_(), bitacora: bitacora, pantallas: pantallas_() };
 }
 
 /** Última conexión de cada área de la hoja Áreas (null = nunca se conectó). */
@@ -576,7 +709,8 @@ function procesarForm_(e) {
   const id     = driveId_(answerPrefix_(nv, 'archivo').split(',')[0].trim());
 
   const setCol = (name, v) => sh.getRange(row, ensureCol_(sh, name)).setValue(v);
-  setCol(C.id, Utilities.getUuid().replace(/-/g, '').slice(0, 8));
+  const idAviso = Utilities.getUuid().replace(/-/g, '').slice(0, 8);
+  setCol(C.id, idAviso);
   sh.getRange(row, ensureCol_(sh, C.activo)).insertCheckboxes().setValue(true);
   const requiere = isYes_(textoControl_(SpreadsheetApp.getActive().getSheetByName(SHEET_CONTROL) || prepararControl_(), 'aprobacion'));
   sh.getRange(row, ensureCol_(sh, C.aprobado)).insertCheckboxes().setValue(!requiere);
@@ -613,7 +747,8 @@ function procesarForm_(e) {
   if (requiere && resultado) {
     alertar_('Aviso pendiente de aprobación: ' + (titulo || 'sin título'),
       (answer_(nv, Q.autor) || 'Alguien') + ' publicó "' + (titulo || 'sin título') + '" para ' + areas + '.\n\n' +
-      'Para que salga en pantalla, marca la casilla "Aprobado" en la fila ' + row + ' de la hoja "' + sh.getName() + '":\n' +
+      'Aprobar con un toque (sale en pantalla en menos de 30 segundos):\n' + linkAprobar_(idAviso) +
+      '\n\nO marca la casilla "Aprobado" en la fila ' + row + ' de la hoja "' + sh.getName() + '":\n' +
       SpreadsheetApp.getActive().getUrl());
   }
 }
@@ -642,6 +777,8 @@ function alEditar(e) {
         semaforoCambiado_(est, usuario_(), 'Planilla');
       } else if (etq.indexOf('alerta urgente') > -1) {
         alertaCambiada_(String(sh.getRange(r, 2).getValue() || '').trim(), usuario_(), 'Planilla');
+      } else if (etq.indexOf('trabajadores laborando') > -1) {
+        PropertiesService.getScriptProperties().setProperty('trabajadoresDesde', new Date().toISOString());
       }
     }
     return;

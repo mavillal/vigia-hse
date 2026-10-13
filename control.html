@@ -110,6 +110,23 @@
     </section>
 
     <section class="card">
+      <h2>Avisos por aprobar</h2>
+      <div class="list" id="pend"></div>
+      <div class="err" id="ePend" role="alert"></div>
+    </section>
+
+    <section class="card">
+      <h2>Trabajadores laborando ahora</h2>
+      <div class="row" style="align-items:flex-end">
+        <div style="flex:1;min-width:140px"><label for="tProp">Personal propio</label><input id="tProp" type="text" inputmode="numeric" placeholder="Ej.: 1248"></div>
+        <div style="flex:1;min-width:140px"><label for="tCont">Personal de contrata</label><input id="tCont" type="text" inputmode="numeric" placeholder="Ej.: 652"></div>
+        <button class="btn" id="bTrab" type="button">Actualizar pantallas</button>
+      </div>
+      <div class="hint" id="tInfo"></div>
+      <div class="err" id="eTrab" role="alert"></div>
+    </section>
+
+    <section class="card">
       <h2>Pantallas</h2>
       <div class="list" id="pant"></div>
     </section>
@@ -151,6 +168,17 @@ function render(d){
   $('alertaNow').innerHTML = d.alerta ? '<div class="alertaOn">Activa desde ' + esc(fecha(d.alerta.desde)) + ': ' + esc(d.alerta.texto) + '</div>'
     : '<p class="ok" style="margin:0">Sin alerta urgente activa.</p>';
   $('bQuitar').style.display = d.alerta ? '' : 'none';
+  var t = d.trabajadores;
+  if (document.activeElement !== $('tProp') && document.activeElement !== $('tCont')) {
+    $('tProp').value = t && t.propios !== null ? t.propios : '';
+    $('tCont').value = t && t.contratas !== null ? t.contratas : '';
+  }
+  $('tInfo').textContent = t ? 'En pantalla: ' + Number(t.total).toLocaleString('es-PE') + ' trabajadores' + (t.desde ? ' · actualizado ' + fecha(t.desde) : '')
+    : 'Sin dato: el bloque no aparece en las pantallas.';
+  $('pend').innerHTML = (d.pendientes || []).map(function(p){
+    return '<div class="li"><span><b>' + esc(p.titulo) + '</b></span><button class="btn" type="button" data-ap="' + esc(p.id) + '" style="padding:8px 14px">Aprobar</button>' +
+      '<span class="s">' + esc([p.categoria, p.areas, p.autor ? 'por ' + p.autor : ''].filter(Boolean).join(' · ')) + '</span></div>';
+  }).join('') || '<p class="hint" style="margin:0">No hay avisos esperando aprobación.</p>';
   $('pant').innerHTML = (d.pantallas || []).map(function(p){
     var cls = p.minutos === null ? 'never' : p.minutos <= 3 ? 'on' : 'off';
     var txt = p.minutos === null ? 'Nunca conectada' : p.minutos <= 3 ? 'En línea' : 'Sin señal ' + p.minutos + ' min';
@@ -242,6 +270,25 @@ $('bAl').addEventListener('click', function(){
   enviarAlerta(t, $('bAl'));
 });
 $('bQuitar').addEventListener('click', function(){ enviarAlerta('', $('bQuitar')); });
+
+$('pend').addEventListener('click', function(e){
+  var b = e.target.closest('button[data-ap]');
+  if (!b) return;
+  b.disabled = true; b.textContent = 'Aprobando…'; $('ePend').textContent = '';
+  post({ accion:'aprobar', id:b.getAttribute('data-ap') }).then(function(d){
+    if (!d.ok) { b.disabled = false; b.textContent = 'Aprobar'; $('ePend').textContent = d.error; return; }
+    render(d);
+  }).catch(function(){ b.disabled = false; b.textContent = 'Aprobar'; $('ePend').textContent = 'No se pudo enviar. Revisa internet y reintenta.'; });
+});
+
+$('bTrab').addEventListener('click', function(){
+  $('eTrab').textContent = ''; $('bTrab').disabled = true;
+  post({ accion:'trabajadores', propios:$('tProp').value.trim(), contratas:$('tCont').value.trim() }).then(function(d){
+    $('bTrab').disabled = false;
+    if (!d.ok) { $('eTrab').textContent = d.error; return; }
+    render(d);
+  }).catch(function(){ $('bTrab').disabled = false; $('eTrab').textContent = 'No se pudo enviar. Revisa internet y reintenta.'; });
+});
 
 if (CLAVE && QUIEN) entrar();
 </script>

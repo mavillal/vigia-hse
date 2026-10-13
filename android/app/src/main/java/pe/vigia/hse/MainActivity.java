@@ -42,7 +42,7 @@ public class MainActivity extends Activity {
     static final String K_AREA = "area";
     private static final long RETRY_MS = 30_000;
     private static final long MENU_AUTOHIDE_MS = 20_000;
-    static final String CONTACTO = "mavillal@gmail.com";
+    static final String CONTACTO = "mario@safetymind.ai";
 
     private static final int NAVY = Color.parseColor("#E60B2440");
     private static final int SAND = Color.parseColor("#F6F3EC");

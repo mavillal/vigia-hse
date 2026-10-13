@@ -47,7 +47,9 @@ global.ScriptApp = { getProjectTriggers:()=>triggers.slice(), deleteTrigger(t){ 
 const p2 = n=>String(n).padStart(2,'0');
 global.Utilities = {
   formatDate:(d,tz,f)=>{ const x=new Date(d.getTime()-5*3600e3); return f.replace('yyyy',x.getUTCFullYear()).replace('MM',p2(x.getUTCMonth()+1)).replace('dd',p2(x.getUTCDate())).replace('HH',p2(x.getUTCHours())).replace('mm',p2(x.getUTCMinutes())); },
-  getUuid:()=>'abcd1234-'+Math.random().toString(16).slice(2,10)
+  getUuid:()=>require('crypto').randomUUID(),
+  computeHmacSha256Signature:(v,k)=>Array.from(require('crypto').createHmac('sha256',k).update(v).digest()),
+  base64EncodeWebSafe:b=>Buffer.from(b).toString('base64').replace(/\+/g,'-').replace(/\//g,'_')
 };
 const cacheMem = {}; let cacheOn = false;
 global.CacheService = { getScriptCache:()=>({ get:k=>cacheOn?(cacheMem[k]||null):(k==='claveFallos'?cacheMem[k]||null:null), put:(k,v)=>{ if(cacheOn||k==='claveFallos') cacheMem[k]=v; }, removeAll:ks=>ks.forEach(k=>delete cacheMem[k]) }) };
@@ -56,6 +58,7 @@ global.MailApp = { sendEmail:(to,subj,body)=>mails.push({to,subj,body}) };
 global.LockService = { getScriptLock:()=>({tryLock:()=>true,waitLock(){},releaseLock(){}}) };
 global.Session = { getActiveUser:()=>({getEmail:()=>'hse@mina.pe'}) };
 global.DriveApp = { Access:{ANYONE_WITH_LINK:1}, Permission:{VIEW:1}, getFileById:id=>({setSharing(){}, getMimeType:()=> id.startsWith('vid')?'video/mp4':id.startsWith('pdf')?'application/pdf':'image/png'}) };
+global.HtmlService = { createHtmlOutput:h=>({html:h, setTitle(){return this}, addMetaTag(){return this}}) };
 global.ContentService = { MimeType:{JSON:1}, createTextOutput:t=>({setMimeType(){return t}}) };
 let theForm = null;
 const item = ()=>{ const it={title:'',choices:[]}; Object.assign(it,{setTitle(t){it.title=t;return it},setRequired(){return it},setHelpText(){return it},setValidation(){return it},setChoiceValues(v){it.choices=v;return it},getTitle(){return it.title},asCheckboxItem(){return it}}); return it; };
@@ -69,7 +72,7 @@ global.FormApp = {
     return theForm; },
   openById:()=>theForm
 };
-eval(fs.readFileSync(process.argv[2],'utf8') + '\nObject.assign(global,{doGet,doPost,setup,onFormSubmit,alEditar,revisarPantallas,recargarPantallas,lastTextRow_,matchArea_,estado_});');
+eval(fs.readFileSync(process.argv[2],'utf8') + '\nObject.assign(global,{doGet,doPost,setup,onFormSubmit,alEditar,revisarPantallas,recargarPantallas,lastTextRow_,matchArea_,estado_,duracion_,numero_,linkAprobar_});');
 
 let ok = true; const check=(cond,msg)=>{ console.log((cond?'  OK   ':'  FALLA ')+msg); if(!cond) ok=false; };
 const get = p => JSON.parse(doGet({parameter:p}));
@@ -95,7 +98,7 @@ check(Object.keys(sheets).filter(n=>/^Respuestas/.test(n)).length===1 && trigger
 
 console.log('\n2) Pantalla de un área');
 const g = get({area:'GARITA'});
-check(g.version==='v1.2' && ss.tz==='America/Lima' && g.areaNombre==='Garita de ingreso', 'GARITA → "Garita de ingreso" y planilla en hora de Lima');
+check(g.version==='v1.3' && ss.tz==='America/Lima' && g.areaNombre==='Garita de ingreso', 'GARITA → "Garita de ingreso" y planilla en hora de Lima');
 check(g.semaforo.estado==='VERDE' && /Sin tormenta/.test(g.semaforo.mensaje), 'semáforo inicial VERDE con su mensaje');
 check(g.alerta===null, 'sin alerta urgente');
 check(g.cinta.length===2 && get({area:'TALLER'}).cinta.length===3, 'cinta: el aviso solo de TALLER no sale en GARITA');
@@ -204,7 +207,33 @@ check(mails.length===2 && /de nuevo en línea/.test(mails[1].subj), 'correo cuan
 const sala = post({accion:'estado',clave});
 check(sala.pantallas.length===3 && sala.pantallas.find(p=>p.codigo==='COMEDOR').minutos===null, 'sala de control ve las 3 pantallas (COMEDOR nunca conectada)');
 
-console.log('\n8) Utilidades');
+console.log('\n8) Duración, bienvenida, trabajadores y aprobación rápida');
+check(duracion_(10)===10 && duracion_('10')===10 && duracion_('10 s')===10 && duracion_('12,5')===12.5 && duracion_('')===12 && duracion_(1)===12, 'duración: 10, "10", "10 s", "12,5" se respetan; vacío o < 3 s → 12');
+ctlSet('aprobacion','No');
+const rDur = submit({'Título':'Aviso de 7 segundos','Texto del aviso':'x','Desde':ayer,'Hasta':manana,'Áreas':'Todas','Duración (segundos)':'7','Prioridad':'Normal','Publicado por':'HSE'});
+const gb = get({area:'GARITA'});
+check(/seguridad/.test(gb.bienvenida), 'bienvenida por defecto: '+gb.bienvenida);
+check(gb.trabajadores===null, 'sin datos de trabajadores: no se muestra el bloque');
+check(post({accion:'trabajadores',clave,propios:'1.248',contratas:'',quien:'Garita'}).trabajadores.total===1248, 'sala de control: propios "1.248" → total 1248');
+const tb = post({accion:'trabajadores',clave,propios:'1248',contratas:'652',quien:'Garita'}).trabajadores;
+check(tb.total===1900 && tb.contratas===652 && get({area:'COMEDOR'}).trabajadores.total===1900, 'propios 1248 + contratas 652 = 1900 en todas las pantallas');
+check(post({accion:'trabajadores',clave,propios:'mil',contratas:'',quien:'Garita'}).ok===false, 'trabajadores con letras: rechazado');
+// aprobación por link y desde la sala
+ctlSet('aprobacion','Sí'); mails.length = 0;
+const rAp = submit({'Título':'Simulacro de evacuación','Texto del aviso':'Jueves 10:00','Desde':ayer,'Hasta':manana,'Áreas':'Todas','Prioridad':'Normal','Publicado por':'Supervisor'});
+const idAp = R.get(rAp, col('ID'));
+check(mails.length===1 && mails[0].body.indexOf(linkAprobar_(idAp))>-1, 'el correo de aprobación trae el link "Aprobar"');
+check(post({accion:'estado',clave}).pendientes.some(x=>x.id===idAp && x.titulo==='Simulacro de evacuación'), 'la sala de control lo ve en pendientes');
+check(/no es válido/.test(doGet({parameter:{aprobar:idAp,t:'falso'}}).html), 'link con token falso no aprueba');
+const outAp = doGet({parameter:{aprobar:idAp,t:linkAprobar_(idAp).split('&t=')[1]}}).html; check(/Aprobado/.test(outAp) && R.get(rAp,col('Aprobado'))===true, 'link válido aprueba');
+check(get({area:'TALLER'}).items.some(x=>x.titulo==='Simulacro de evacuación'), 'y sale en pantalla al instante');
+check(sheets['Bitácora'].d.some(r=>r[1]==='Aviso aprobado' && r[2]==='Simulacro de evacuación' && r[4]==='Correo'), 'la aprobación queda en la bitácora');
+const rAp2 = submit({'Título':'Charla de orden y limpieza','Categoría':'Charla de 5 minutos','Texto del aviso':'x','Desde':ayer,'Hasta':manana,'Áreas':'Todas','Prioridad':'Normal','Publicado por':'Supervisor'});
+const ap2 = post({accion:'aprobar',clave,id:R.get(rAp2,col('ID')),quien:'Jefe HSE'});
+check(ap2.ok && R.get(rAp2,col('Aprobado'))===true && !ap2.pendientes.some(x=>x.titulo==='Charla de orden y limpieza'), 'aprobar desde la sala de control');
+check(get({area:'GARITA'}).items.find(x=>x.titulo==='Aviso de 7 segundos').dur===7, 'el aviso con "7" dura 7 s');
+
+console.log('\n9) Utilidades');
 check(estado_('Roja')==='ROJA' && estado_('ámbar')==='AMARILLA' && estado_('')==='VERDE', 'estado_ normaliza el semáforo');
 check(matchArea_('garita', {codigo:'GARITA',nombre:'Garita de ingreso'}) && !matchArea_('Comedor del campamento', {codigo:'GARITA',nombre:'Garita de ingreso'}), 'matchArea_ por código o nombre');
 
